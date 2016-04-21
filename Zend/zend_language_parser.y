@@ -458,6 +458,8 @@ catch_list:
 			{ $$ = zend_ast_create_list(0, ZEND_AST_CATCH_LIST); }
 	|	catch_list T_CATCH '(' name T_VARIABLE ')' '{' inner_statement_list '}'
 			{ $$ = zend_ast_list_add($1, zend_ast_create(ZEND_AST_CATCH, $4, $5, $8)); }
+	|	catch_list T_CATCH '(' name ')' '{' inner_statement_list '}'
+			{ $$ = zend_ast_list_add($1, zend_ast_create(ZEND_AST_CATCH, $4, NULL, $7)); }
 ;
 
 finally_statement:

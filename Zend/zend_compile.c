@@ -4575,7 +4575,7 @@ void zend_compile_try(zend_ast *ast) /* {{{ */
 		zend_ast *class_ast = catch_ast->child[0];
 		zend_ast *var_ast = catch_ast->child[1];
 		zend_ast *stmt_ast = catch_ast->child[2];
-		zval *var_name = zend_ast_get_zval(var_ast);
+		zval *var_name = var_ast ? zend_ast_get_zval(var_ast) : NULL;
 		zend_bool is_last_catch = (i + 1 == catches->children);
 
 		uint32_t opnum_catch;
@@ -4597,8 +4597,13 @@ void zend_compile_try(zend_ast *ast) /* {{{ */
 		opline->op1.constant = zend_add_class_name_literal(CG(active_op_array),
 			zend_resolve_class_name_ast(class_ast));
 
-		opline->op2_type = IS_CV;
-		opline->op2.var = lookup_cv(CG(active_op_array), zend_string_copy(Z_STR_P(var_name)));
+		if (var_name) {
+			opline->op2_type = IS_CV;
+			opline->op2.var = lookup_cv(CG(active_op_array), zend_string_copy(Z_STR_P(var_name)));
+		} else {
+			opline->op2_type = IS_UNUSED;
+		}
+
 		opline->result.num = is_last_catch;
 
 		zend_compile_stmt(stmt_ast);

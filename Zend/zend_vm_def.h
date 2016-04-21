@@ -4121,7 +4121,7 @@ ZEND_VM_HANDLER(108, ZEND_THROW, CONST|TMP|VAR|CV, ANY)
 	HANDLE_EXCEPTION();
 }
 
-ZEND_VM_HANDLER(107, ZEND_CATCH, CONST, CV, JMP_ADDR)
+ZEND_VM_HANDLER(107, ZEND_CATCH, CONST, CV|UNUSED, JMP_ADDR)
 {
 	USE_OPLINE
 	zend_class_entry *ce, *catch_ce;
@@ -4160,12 +4160,21 @@ ZEND_VM_HANDLER(107, ZEND_CATCH, CONST, CV, JMP_ADDR)
 	}
 
 	exception = EG(exception);
-	zval_ptr_dtor(EX_VAR(opline->op2.var));
-	ZVAL_OBJ(EX_VAR(opline->op2.var), EG(exception));
+
+	if (EXPECTED(OP2_TYPE == IS_CV)) {
+		zval_ptr_dtor(EX_VAR(opline->op2.var));
+		ZVAL_OBJ(EX_VAR(opline->op2.var), EG(exception));
+	}
+
 	if (UNEXPECTED(EG(exception) != exception)) {
-		GC_REFCOUNT(EG(exception))++;
+		if (EXPECTED(OP2_TYPE == IS_CV)) {
+			GC_REFCOUNT(EG(exception))++;
+		}
 		HANDLE_EXCEPTION();
 	} else {
+		if (UNEXPECTED(OP2_TYPE == IS_UNUSED)) {
+			GC_REFCOUNT(EG(exception))--;
+		}
 		EG(exception) = NULL;
 		ZEND_VM_NEXT_OPCODE();
 	}

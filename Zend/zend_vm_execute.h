@@ -7430,6 +7430,65 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_VERIFY_RETURN_TYPE_SPEC_CONST_
 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
 }
 
+static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CATCH_SPEC_CONST_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
+{
+	USE_OPLINE
+	zend_class_entry *ce, *catch_ce;
+	zend_object *exception;
+
+	SAVE_OPLINE();
+	/* Check whether an exception has been thrown, if not, jump over code */
+	zend_exception_restore();
+	if (EG(exception) == NULL) {
+		ZEND_VM_SET_RELATIVE_OPCODE(opline, opline->extended_value);
+		ZEND_VM_CONTINUE();
+	}
+	catch_ce = CACHED_PTR(Z_CACHE_SLOT_P(EX_CONSTANT(opline->op1)));
+	if (UNEXPECTED(catch_ce == NULL)) {
+		catch_ce = zend_fetch_class_by_name(Z_STR_P(EX_CONSTANT(opline->op1)), EX_CONSTANT(opline->op1) + 1, ZEND_FETCH_CLASS_NO_AUTOLOAD);
+
+		CACHE_PTR(Z_CACHE_SLOT_P(EX_CONSTANT(opline->op1)), catch_ce);
+	}
+	ce = EG(exception)->ce;
+
+#ifdef HAVE_DTRACE
+	if (DTRACE_EXCEPTION_CAUGHT_ENABLED()) {
+		DTRACE_EXCEPTION_CAUGHT((char *)ce->name);
+	}
+#endif /* HAVE_DTRACE */
+
+	if (ce != catch_ce) {
+		if (!catch_ce || !instanceof_function(ce, catch_ce)) {
+			if (opline->result.num) {
+				zend_throw_exception_internal(NULL);
+				HANDLE_EXCEPTION();
+			}
+			ZEND_VM_SET_RELATIVE_OPCODE(opline, opline->extended_value);
+			ZEND_VM_CONTINUE();
+		}
+	}
+
+	exception = EG(exception);
+
+	if (EXPECTED(IS_UNUSED == IS_CV)) {
+		zval_ptr_dtor(EX_VAR(opline->op2.var));
+		ZVAL_OBJ(EX_VAR(opline->op2.var), EG(exception));
+	}
+
+	if (UNEXPECTED(EG(exception) != exception)) {
+		if (EXPECTED(IS_UNUSED == IS_CV)) {
+			GC_REFCOUNT(EG(exception))++;
+		}
+		HANDLE_EXCEPTION();
+	} else {
+		if (UNEXPECTED(IS_UNUSED == IS_UNUSED)) {
+			GC_REFCOUNT(EG(exception))--;
+		}
+		EG(exception) = NULL;
+		ZEND_VM_NEXT_OPCODE();
+	}
+}
+
 static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_ADD_ARRAY_ELEMENT_SPEC_CONST_UNUSED_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
 	USE_OPLINE
@@ -9315,12 +9374,21 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_CATCH_SPEC_CONST_CV_HANDLER(ZE
 	}
 
 	exception = EG(exception);
-	zval_ptr_dtor(EX_VAR(opline->op2.var));
-	ZVAL_OBJ(EX_VAR(opline->op2.var), EG(exception));
+
+	if (EXPECTED(IS_CV == IS_CV)) {
+		zval_ptr_dtor(EX_VAR(opline->op2.var));
+		ZVAL_OBJ(EX_VAR(opline->op2.var), EG(exception));
+	}
+
 	if (UNEXPECTED(EG(exception) != exception)) {
-		GC_REFCOUNT(EG(exception))++;
+		if (EXPECTED(IS_CV == IS_CV)) {
+			GC_REFCOUNT(EG(exception))++;
+		}
 		HANDLE_EXCEPTION();
 	} else {
+		if (UNEXPECTED(IS_CV == IS_UNUSED)) {
+			GC_REFCOUNT(EG(exception))--;
+		}
 		EG(exception) = NULL;
 		ZEND_VM_NEXT_OPCODE();
 	}
@@ -57749,7 +57817,7 @@ void zend_init_opcodes_handlers(void)
 		ZEND_NULL_HANDLER,
 		ZEND_NULL_HANDLER,
 		ZEND_NULL_HANDLER,
-		ZEND_NULL_HANDLER,
+		ZEND_CATCH_SPEC_CONST_UNUSED_HANDLER,
 		ZEND_CATCH_SPEC_CONST_CV_HANDLER,
 		ZEND_NULL_HANDLER,
 		ZEND_NULL_HANDLER,
