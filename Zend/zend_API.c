@@ -126,6 +126,8 @@ ZEND_API char *zend_get_type_by_const(int type) /* {{{ */
 			return "array";
 		case IS_VOID:
 			return "void";
+		case IS_MIXED:
+			return "mixed";
 		default:
 			return "unknown";
 	}

@@ -385,7 +385,8 @@ struct _zend_ast_ref {
 #define _IS_BOOL					16
 #define IS_CALLABLE					17
 #define IS_ITERABLE					18
-#define IS_VOID						19
+#define IS_MIXED					19
+#define IS_VOID						20
 
 static zend_always_inline zend_uchar zval_get_type(const zval* pz) {
 	return pz->u1.v.type;
