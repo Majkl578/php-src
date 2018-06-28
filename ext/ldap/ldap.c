@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -24,7 +24,6 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id$ */
 #define IS_EXT_MODULE
 
 #ifdef HAVE_CONFIG_H
@@ -906,7 +905,6 @@ PHP_MINFO_FUNCTION(ldap)
 
 	php_info_print_table_start();
 	php_info_print_table_row(2, "LDAP Support", "enabled");
-	php_info_print_table_row(2, "RCS Version", "$Id$");
 
 	if (LDAPG(max_links) == -1) {
 		snprintf(tmp, 31, ZEND_LONG_FMT "/unlimited", LDAPG(num_links));
@@ -1856,7 +1854,11 @@ PHP_FUNCTION(ldap_get_entries)
 
 		add_assoc_long(&tmp1, "count", num_attrib);
 		dn = ldap_get_dn(ldap, ldap_result_entry);
-		add_assoc_string(&tmp1, "dn", dn);
+		if (dn) {
+			add_assoc_string(&tmp1, "dn", dn);
+		} else {
+			add_assoc_null(&tmp1, "dn");
+		}
 #if (LDAP_API_VERSION > 2000) || HAVE_NSLDAP || HAVE_ORALDAP || WINDOWS
 		ldap_memfree(dn);
 #else
@@ -3328,10 +3330,10 @@ PHP_FUNCTION(ldap_parse_result)
 	zval *link, *result, *errcode, *matcheddn, *errmsg, *referrals, *serverctrls;
 	ldap_linkdata *ld;
 	LDAPMessage *ldap_result;
-	LDAPControl **lserverctrls = NULL, **ctrlp = NULL;
+	LDAPControl **lserverctrls = NULL;
 	char **lreferrals, **refp;
 	char *lmatcheddn, *lerrmsg;
-	int rc, lerrcode, myargcount = ZEND_NUM_ARGS(), ber_decode_error_count = -1;
+	int rc, lerrcode, myargcount = ZEND_NUM_ARGS();
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "rrz/|z/z/z/z/", &link, &result, &errcode, &matcheddn, &errmsg, &referrals, &serverctrls) != SUCCESS) {
 		return;
@@ -3755,7 +3757,7 @@ PHP_FUNCTION(ldap_set_rebind_proc)
 	if (!zend_is_callable(callback, 0, NULL)) {
 		zend_string *callback_name = zend_get_callable_name(callback);
 		php_error_docref(NULL, E_WARNING, "Two arguments expected for '%s' to be a valid callback", ZSTR_VAL(callback_name));
-		zend_string_release(callback_name);
+		zend_string_release_ex(callback_name, 0);
 		RETURN_FALSE;
 	}
 
@@ -4320,7 +4322,7 @@ PHP_FUNCTION(ldap_exop_whoami)
 	zval *link;
 	struct berval *lauthzid;
 	ldap_linkdata *ld;
-	int rc, myargcount = ZEND_NUM_ARGS();
+	int rc;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "r", &link) == FAILURE) {
 		WRONG_PARAM_COUNT;

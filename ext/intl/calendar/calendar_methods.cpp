@@ -43,6 +43,8 @@ extern "C" {
 }
 #include "../common/common_enum.h"
 
+using icu::Locale;
+
 U_CFUNC PHP_METHOD(IntlCalendar, __construct)
 {
 	zend_throw_exception( NULL,
@@ -91,7 +93,7 @@ U_CFUNC PHP_FUNCTION(intlcal_create_instance)
 class BugStringCharEnumeration : public StringEnumeration
 {
 public:
-	BugStringCharEnumeration(UEnumeration* _uenum) : uenum(_uenum) {}
+	explicit BugStringCharEnumeration(UEnumeration* _uenum) : uenum(_uenum) {}
 
 	~BugStringCharEnumeration()
 	{

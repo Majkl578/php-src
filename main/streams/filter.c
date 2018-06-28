@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -49,7 +49,7 @@ PHPAPI int php_stream_filter_register_factory(const char *filterpattern, const p
 	int ret;
 	zend_string *str = zend_string_init_interned(filterpattern, strlen(filterpattern), 1);
 	ret = zend_hash_add_ptr(&stream_filters_hash, str, (void*)factory) ? SUCCESS : FAILURE;
-	zend_string_release(str);
+	zend_string_release_ex(str, 1);
 	return ret;
 }
 

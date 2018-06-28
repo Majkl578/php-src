@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2018 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -63,17 +63,23 @@ ZEND_API zval* zend_call_method(zval *object, zend_class_entry *obj_ce, zend_fun
 		zend_fcall_info_cache fcic;
 		ZVAL_UNDEF(&fci.function_name); /* Unused */
 
-		fcic.initialized = 1;
 		if (!obj_ce) {
 			obj_ce = object ? Z_OBJCE_P(object) : NULL;
 		}
 		if (!fn_proxy || !*fn_proxy) {
-			HashTable *function_table = obj_ce ? &obj_ce->function_table : EG(function_table);
-			fcic.function_handler = zend_hash_str_find_ptr(
-				function_table, function_name, function_name_len);
-			if (fcic.function_handler == NULL) {
-				/* error at c-level */
-				zend_error_noreturn(E_CORE_ERROR, "Couldn't find implementation for method %s%s%s", obj_ce ? ZSTR_VAL(obj_ce->name) : "", obj_ce ? "::" : "", function_name);
+			if (EXPECTED(obj_ce)) {
+				fcic.function_handler = zend_hash_str_find_ptr(
+					&obj_ce->function_table, function_name, function_name_len);
+				if (UNEXPECTED(fcic.function_handler == NULL)) {
+					/* error at c-level */
+					zend_error_noreturn(E_CORE_ERROR, "Couldn't find implementation for method %s::%s", ZSTR_VAL(obj_ce->name), function_name);
+				}
+			} else {
+				fcic.function_handler = zend_fetch_function_str(function_name, function_name_len);
+				if (UNEXPECTED(fcic.function_handler == NULL)) {
+					/* error at c-level */
+					zend_error_noreturn(E_CORE_ERROR, "Couldn't find implementation for function %s", function_name);
+				}
 			}
 			if (fn_proxy) {
 				*fn_proxy = fcic.function_handler;
@@ -82,7 +88,6 @@ ZEND_API zval* zend_call_method(zval *object, zend_class_entry *obj_ce, zend_fun
 			fcic.function_handler = *fn_proxy;
 		}
 
-		fcic.calling_scope = obj_ce;
 		if (object) {
 			fcic.called_scope = Z_OBJCE_P(object);
 		} else {

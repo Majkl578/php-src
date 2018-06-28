@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -38,7 +38,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
- */ 
+ */
 
 #ifndef PHP_WIN32_IOUTIL_H
 #define PHP_WIN32_IOUTIL_H
@@ -155,7 +155,8 @@ typedef enum {
 	(len) > 1 && !PHP_WIN32_IOUTIL_IS_SLASHW(pathw[(len)-2]) && L'.' != pathw[(len)-2] && L'.' == pathw[(len)-1]))
 
 #define PHP_WIN32_IOUTIL_CHECK_PATH_W(pathw, ret, dealloc) do { \
-		if (!PHP_WIN32_IOUTIL_PATH_IS_OK_W(pathw, wcslen(pathw))) { \
+		size_t _len = wcslen(pathw); \
+		if (!PHP_WIN32_IOUTIL_PATH_IS_OK_W(pathw, _len)) { \
 			if (dealloc) { \
 				free((void *)pathw); \
 			} \
@@ -166,7 +167,7 @@ typedef enum {
 
 PW32IO php_win32_ioutil_normalization_result php_win32_ioutil_normalize_path_w(wchar_t **buf, size_t len, size_t *new_len);
 #ifdef PHP_EXPORTS
-/* This symbols are needed only for the DllMain, but should not be exported 
+/* This symbols are needed only for the DllMain, but should not be exported
 	or be available when used with PHP binaries. */
 BOOL php_win32_ioutil_init(void);
 #endif
@@ -177,7 +178,7 @@ __forceinline static wchar_t *php_win32_ioutil_conv_any_to_w(const char* in, siz
 {/*{{{*/
 	wchar_t *mb, *ret;
 	size_t mb_len;
-	
+
 	mb = php_win32_cp_conv_any_to_w(in, in_len, &mb_len);
 	if (!mb) {
 		return NULL;
@@ -376,7 +377,7 @@ __forceinline static FILE *php_win32_ioutil_fopen(const char *patha, const char 
 {/*{{{*/
 	FILE *ret;
 	wchar_t modew[16] = {0};
-	int err = 0, i = 0;
+	int i = 0;
 
 	PHP_WIN32_IOUTIL_INIT_W(patha)
 	if (!pathw) {
@@ -393,7 +394,7 @@ __forceinline static FILE *php_win32_ioutil_fopen(const char *patha, const char 
 
 	ret = php_win32_ioutil_fopen_w(pathw, modew);
 	if (!ret) {
-		err = GetLastError();
+		int err = GetLastError();
 		PHP_WIN32_IOUTIL_CLEANUP_W()
 		SET_ERRNO_FROM_WIN32_CODE(err);
 		return NULL;
@@ -423,11 +424,14 @@ __forceinline static int php_win32_ioutil_rename(const char *oldnamea, const cha
 		free(oldnamew);
 		SET_ERRNO_FROM_WIN32_CODE(ERROR_INVALID_PARAMETER);
 		return -1;
-	} else if (!PHP_WIN32_IOUTIL_PATH_IS_OK_W(newnamew, wcslen(newnamew))) {
-		free(oldnamew);
-		free(newnamew);
-		SET_ERRNO_FROM_WIN32_CODE(ERROR_ACCESS_DENIED);
-		return -1;
+	} else {
+		size_t newnamew_len = wcslen(newnamew);
+		if (!PHP_WIN32_IOUTIL_PATH_IS_OK_W(newnamew, newnamew_len)) {
+			free(oldnamew);
+			free(newnamew);
+			SET_ERRNO_FROM_WIN32_CODE(ERROR_ACCESS_DENIED);
+			return -1;
+		}
 	}
 
 	ret = php_win32_ioutil_rename_w(oldnamew, newnamew);

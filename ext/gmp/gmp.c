@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -425,6 +425,14 @@ static int gmp_cast_object(zval *readobj, zval *writeobj, int type) /* {{{ */
 		gmpnum = GET_GMP_FROM_ZVAL(readobj);
 		ZVAL_DOUBLE(writeobj, mpz_get_d(gmpnum));
 		return SUCCESS;
+	case _IS_NUMBER:
+		gmpnum = GET_GMP_FROM_ZVAL(readobj);
+		if (mpz_fits_slong_p(gmpnum)) {
+			ZVAL_LONG(writeobj, mpz_get_si(gmpnum));
+		} else {
+			ZVAL_DOUBLE(writeobj, mpz_get_d(gmpnum));
+		}
+		return SUCCESS;
 	default:
 		return FAILURE;
 	}
@@ -563,7 +571,7 @@ static int gmp_serialize(zval *object, unsigned char **buffer, size_t *buf_len, 
 	mpz_ptr gmpnum = GET_GMP_FROM_ZVAL(object);
 	smart_str buf = {0};
 	zval zv;
-	php_serialize_data_t serialize_data = (php_serialize_data_t) data;
+	php_serialize_data_t serialize_data;
 
 	PHP_VAR_SERIALIZE_INIT(serialize_data);
 
@@ -577,7 +585,7 @@ static int gmp_serialize(zval *object, unsigned char **buffer, size_t *buf_len, 
 	PHP_VAR_SERIALIZE_DESTROY(serialize_data);
 	*buffer = (unsigned char *) estrndup(ZSTR_VAL(buf.s), ZSTR_LEN(buf.s));
 	*buf_len = ZSTR_LEN(buf.s);
-	zend_string_release(buf.s);
+	zend_string_release_ex(buf.s, 0);
 
 	return SUCCESS;
 }
@@ -589,7 +597,7 @@ static int gmp_unserialize(zval *object, zend_class_entry *ce, const unsigned ch
 	const unsigned char *p, *max;
 	zval *zv;
 	int retval = FAILURE;
-	php_unserialize_data_t unserialize_data = (php_unserialize_data_t) data;
+	php_unserialize_data_t unserialize_data;
 	zval object_copy;
 
 	PHP_VAR_UNSERIALIZE_INIT(unserialize_data);
@@ -655,7 +663,7 @@ ZEND_MINIT_FUNCTION(gmp)
 	gmp_ce->serialize = gmp_serialize;
 	gmp_ce->unserialize = gmp_unserialize;
 
-	memcpy(&gmp_object_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+	memcpy(&gmp_object_handlers, &std_object_handlers, sizeof(zend_object_handlers));
 	gmp_object_handlers.offset = XtOffsetOf(gmp_object, std);
 	gmp_object_handlers.free_obj = gmp_free_object_storage;
 	gmp_object_handlers.cast_object = gmp_cast_object;
@@ -1421,7 +1429,7 @@ ZEND_FUNCTION(gmp_binomial)
 ZEND_FUNCTION(gmp_pow)
 {
 	zval *base_arg;
-	mpz_ptr gmpnum_result, gmpnum_base;
+	mpz_ptr gmpnum_result;
 	gmp_temp_t temp_base;
 	zend_long exp;
 
@@ -1438,6 +1446,7 @@ ZEND_FUNCTION(gmp_pow)
 		INIT_GMP_RETVAL(gmpnum_result);
 		mpz_ui_pow_ui(gmpnum_result, Z_LVAL_P(base_arg), exp);
 	} else {
+		mpz_ptr gmpnum_base;
 		FETCH_GMP_ZVAL(gmpnum_base, base_arg, temp_base);
 		INIT_GMP_RETVAL(gmpnum_result);
 		mpz_pow_ui(gmpnum_result, gmpnum_base, exp);
@@ -1688,7 +1697,7 @@ ZEND_FUNCTION(gmp_prob_prime)
 
 	FETCH_GMP_ZVAL(gmpnum_a, gmpnumber_arg, temp_a);
 
-	RETVAL_LONG(mpz_probab_prime_p(gmpnum_a, reps));
+	RETVAL_LONG(mpz_probab_prime_p(gmpnum_a, (int)reps));
 	FREE_GMP_TEMP(temp_a);
 }
 /* }}} */
@@ -1900,7 +1909,6 @@ ZEND_FUNCTION(gmp_random)
 ZEND_FUNCTION(gmp_random_seed)
 {
 	zval *seed;
-	mpz_ptr gmpnum_seed;
 	gmp_temp_t temp_a;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "z", &seed) == FAILURE) {
@@ -1913,6 +1921,8 @@ ZEND_FUNCTION(gmp_random_seed)
 		gmp_randseed_ui(GMPG(rand_state), Z_LVAL_P(seed));
 	}
 	else {
+		mpz_ptr gmpnum_seed;
+
 		FETCH_GMP_ZVAL(gmpnum_seed, seed, temp_a);
 
 		gmp_randseed(GMPG(rand_state), gmpnum_seed);
@@ -1950,7 +1960,7 @@ ZEND_FUNCTION(gmp_random_bits)
 ZEND_FUNCTION(gmp_random_range)
 {
 	zval *min_arg, *max_arg;
-	mpz_ptr gmpnum_min, gmpnum_max, gmpnum_result;
+	mpz_ptr gmpnum_max, gmpnum_result;
 	mpz_t gmpnum_range;
 	gmp_temp_t temp_a, temp_b;
 
@@ -1987,6 +1997,8 @@ ZEND_FUNCTION(gmp_random_range)
 		mpz_clear(gmpnum_range);
 		FREE_GMP_TEMP(temp_a);
 	} else {
+		mpz_ptr gmpnum_min;
+
 		FETCH_GMP_ZVAL_DEP(gmpnum_min, min_arg, temp_b, temp_a);
 
 		if (mpz_cmp(gmpnum_max, gmpnum_min) <= 0) {
@@ -2068,6 +2080,10 @@ ZEND_FUNCTION(gmp_setbit)
 		php_error_docref(NULL, E_WARNING, "Index must be greater than or equal to zero");
 		RETURN_FALSE;
 	}
+    if (index / GMP_NUMB_BITS >= INT_MAX) {
+        php_error_docref(NULL, E_WARNING, "Index must be less than %d * %d", INT_MAX, GMP_NUMB_BITS);
+        RETURN_FALSE;
+    }
 
 	gmpnum_a = GET_GMP_FROM_ZVAL(a_arg);
 

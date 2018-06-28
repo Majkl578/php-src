@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2006-2017 The PHP Group                                |
+  | Copyright (c) 2006-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -427,9 +427,7 @@ php_mysqlnd_greet_read(MYSQLND_CONN_DATA * conn, void * _packet)
 		if (packet->authentication_plugin_data.l > SCRAMBLE_LENGTH) {
 			/* more data*/
 			char * new_auth_plugin_data = emalloc(packet->authentication_plugin_data.l);
-			if (!new_auth_plugin_data) {
-				goto premature_end;
-			}
+
 			/* copy what we already have */
 			memcpy(new_auth_plugin_data, packet->authentication_plugin_data.s, SCRAMBLE_LENGTH);
 			/* add additional scramble data 5.5+ sent us */
@@ -1391,7 +1389,7 @@ php_mysqlnd_read_row_ex(MYSQLND_PFC * pfc,
 	size_t prealloc_more_bytes;
 
 	DBG_ENTER("php_mysqlnd_read_row_ex");
-	
+
 	/*
 	  To ease the process the server splits everything in packets up to 2^24 - 1.
 	  Even in the case the payload is evenly divisible by this value, the last
@@ -1405,7 +1403,7 @@ php_mysqlnd_read_row_ex(MYSQLND_PFC * pfc,
 	  needs to be able to append a terminating \0 for atoi/atof.
 	*/
 	prealloc_more_bytes = 1;
-	
+
 	*data_size = 0;
 	while (1) {
 		if (FAIL == mysqlnd_read_header(pfc, vio, &header, stats, error_info)) {
@@ -2154,6 +2152,74 @@ php_mysqlnd_sha256_pk_request_response_free_mem(void * _packet)
 }
 /* }}} */
 
+static
+size_t php_mysqlnd_cached_sha2_result_write(MYSQLND_CONN_DATA * conn, void * _packet)
+{
+	MYSQLND_PACKET_CACHED_SHA2_RESULT * packet= (MYSQLND_PACKET_CACHED_SHA2_RESULT *) _packet;
+	MYSQLND_ERROR_INFO * error_info = conn->error_info;
+	MYSQLND_PFC * pfc = conn->protocol_frame_codec;
+	MYSQLND_VIO * vio = conn->vio;
+	MYSQLND_STATS * stats = conn->stats;
+#if HAVE_COMPILER_C99_VLA
+	zend_uchar buffer[MYSQLND_HEADER_SIZE + packet->password_len + 1];
+#else
+	ALLOCA_FLAG(use_heap)
+	zend_uchar *buffer = do_alloca(MYSQLND_HEADER_SIZE + packet->password_len + 1, use_heap);
+#endif
+	size_t sent;
+
+	DBG_ENTER("php_mysqlnd_cached_sha2_result_write");
+
+	if (packet->request == 1) {
+		int1store(buffer + MYSQLND_HEADER_SIZE, '\2');
+		sent = pfc->data->m.send(pfc, vio, buffer, 1, stats, error_info);
+	} else {
+		memcpy(buffer + MYSQLND_HEADER_SIZE, packet->password, packet->password_len);
+		sent = pfc->data->m.send(pfc, vio, buffer, packet->password_len, stats, error_info);
+	}
+
+#if !HAVE_COMPILER_C99_VLA
+	free_alloca(buffer, use_heap);
+#endif
+
+	DBG_RETURN(sent);
+}
+
+static enum_func_status
+php_mysqlnd_cached_sha2_result_read(MYSQLND_CONN_DATA * conn, void * _packet)
+{
+	MYSQLND_PACKET_CACHED_SHA2_RESULT * packet= (MYSQLND_PACKET_CACHED_SHA2_RESULT *) _packet;
+	MYSQLND_ERROR_INFO * error_info = conn->error_info;
+	MYSQLND_PFC * pfc = conn->protocol_frame_codec;
+	MYSQLND_VIO * vio = conn->vio;
+	MYSQLND_STATS * stats = conn->stats;
+	MYSQLND_CONNECTION_STATE * connection_state = &conn->state;
+	zend_uchar buf[SHA256_PK_REQUEST_RESP_BUFFER_SIZE];
+	zend_uchar *p = buf;
+	const zend_uchar * const begin = buf;
+
+	DBG_ENTER("php_mysqlnd_cached_sha2_result_read");
+	if (FAIL == mysqlnd_read_packet_header_and_body(&(packet->header), pfc, vio, stats, error_info, connection_state, buf, sizeof(buf), "PROT_CACHED_SHA2_RESULT_PACKET", PROT_CACHED_SHA2_RESULT_PACKET)) {
+		DBG_RETURN(FAIL);
+	}
+	BAIL_IF_NO_MORE_DATA;
+
+	p++;
+	packet->response_code = uint1korr(p);
+	BAIL_IF_NO_MORE_DATA;
+
+	p++;
+	packet->result = uint1korr(p);
+	BAIL_IF_NO_MORE_DATA;
+
+	DBG_RETURN(PASS);
+
+premature_end:
+	DBG_ERR_FMT("OK packet %d bytes shorter than expected", p - begin - packet->header.size);
+	php_error_docref(NULL, E_WARNING, "SHA256_PK_REQUEST_RESPONSE packet "MYSQLND_SZ_T_SPEC" bytes shorter than expected",
+					 p - begin - packet->header.size);
+	DBG_RETURN(FAIL);
+}
 
 /* {{{ packet_methods */
 static
@@ -2233,9 +2299,14 @@ mysqlnd_packet_methods packet_methods[PROT_LAST] =
 		php_mysqlnd_sha256_pk_request_response_read,
 		NULL, /* write */
 		php_mysqlnd_sha256_pk_request_response_free_mem,
-	} /* PROT_SHA256_PK_REQUEST_RESPONSE_PACKET */
+	}, /* PROT_SHA256_PK_REQUEST_RESPONSE_PACKET */
+	{
+		php_mysqlnd_cached_sha2_result_read,
+		php_mysqlnd_cached_sha2_result_write,
+		NULL
+	} /* PROT_CACHED_SHA2_RESULT_PACKET */
 };
-/* }}} */
+/* }}} */     
 
 
 /* {{{ mysqlnd_protocol::init_greet_packet */
@@ -2411,8 +2482,19 @@ static void
 MYSQLND_METHOD(mysqlnd_protocol, init_sha256_pk_request_response_packet)(struct st_mysqlnd_packet_sha256_pk_request_response *packet)
 {
 	DBG_ENTER("mysqlnd_protocol::init_sha256_pk_request_response_packet");
-	packet->header.m = &packet_methods[PROT_SHA256_PK_REQUEST_RESPONSE_PACKET];
 	memset(packet, 0, sizeof(*packet));
+	packet->header.m = &packet_methods[PROT_SHA256_PK_REQUEST_RESPONSE_PACKET];
+	DBG_VOID_RETURN;
+}
+/* }}} */
+
+/* {{{ mysqlnd_protocol::init_cached_sha2_result_packet */
+static void
+MYSQLND_METHOD(mysqlnd_protocol, init_cached_sha2_result_packet)(struct st_mysqlnd_packet_cached_sha2_result *packet)
+{
+	DBG_ENTER("mysqlnd_protocol::init_cached_sha2_result_packet");
+	memset(packet, 0, sizeof(*packet));
+	packet->header.m = &packet_methods[PROT_CACHED_SHA2_RESULT_PACKET];
 	DBG_VOID_RETURN;
 }
 /* }}} */
@@ -2635,6 +2717,7 @@ MYSQLND_CLASS_METHODS_START(mysqlnd_protocol_payload_decoder_factory)
 	MYSQLND_METHOD(mysqlnd_protocol, init_change_user_response_packet),
 	MYSQLND_METHOD(mysqlnd_protocol, init_sha256_pk_request_packet),
 	MYSQLND_METHOD(mysqlnd_protocol, init_sha256_pk_request_response_packet),
+	MYSQLND_METHOD(mysqlnd_protocol, init_cached_sha2_result_packet),
 
 	MYSQLND_METHOD(mysqlnd_protocol, send_command),
 	MYSQLND_METHOD(mysqlnd_protocol, send_command_handle_response),

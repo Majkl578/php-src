@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -94,7 +94,7 @@
 #define PHP_X509_NAME_ENTRY_TO_UTF8(ne, i, out) \
 	ASN1_STRING_to_UTF8(&out, X509_NAME_ENTRY_get_data(X509_NAME_get_entry(ne, i)))
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER)
+#if PHP_OPENSSL_API_VERSION < 0x10100
 static RSA *php_openssl_tmp_rsa_cb(SSL *s, int is_export, int keylength);
 #endif
 
@@ -313,7 +313,7 @@ static int php_openssl_x509_fingerprint_cmp(X509 *peer, const char *method, cons
 	fingerprint = php_openssl_x509_fingerprint(peer, method, 0);
 	if (fingerprint) {
 		result = strcasecmp(expected, ZSTR_VAL(fingerprint));
-		zend_string_release(fingerprint);
+		zend_string_release_ex(fingerprint, 0);
 	}
 
 	return result;
@@ -1137,7 +1137,7 @@ static void php_openssl_init_server_reneg_limit(php_stream *stream, php_openssl_
 }
 /* }}} */
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER)
+#if PHP_OPENSSL_API_VERSION < 0x10100
 static RSA *php_openssl_tmp_rsa_cb(SSL *s, int is_export, int keylength)
 {
 	BIGNUM *bn = NULL;
@@ -1206,7 +1206,7 @@ static int php_openssl_set_server_dh_param(php_stream * stream, SSL_CTX *ctx) /*
 }
 /* }}} */
 
-#if defined(HAVE_ECDH) && (OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER))
+#if defined(HAVE_ECDH) && PHP_OPENSSL_API_VERSION < 0x10100
 static int php_openssl_set_server_ecdh_curve(php_stream *stream, SSL_CTX *ctx) /* {{{ */
 {
 	zval *zvcurve;
@@ -1249,13 +1249,13 @@ static int php_openssl_set_server_specific_opts(php_stream *stream, SSL_CTX *ctx
 	zval *zv;
 	long ssl_ctx_options = SSL_CTX_get_options(ctx);
 
-#if defined(HAVE_ECDH) && (OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER))
+#if defined(HAVE_ECDH) && PHP_OPENSSL_API_VERSION < 0x10100
 	if (php_openssl_set_server_ecdh_curve(stream, ctx) == FAILURE) {
 		return FAILURE;
 	}
 #endif
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER)
+#if PHP_OPENSSL_API_VERSION < 0x10100
 	SSL_CTX_set_tmp_rsa_callback(ctx, php_openssl_tmp_rsa_cb);
 #endif
 	/* We now use php_openssl_tmp_rsa_cb to generate a key of appropriate size whenever necessary */
@@ -1860,7 +1860,7 @@ static int php_openssl_enable_crypto(php_stream *stream,
 
 		do {
 			struct timeval cur_time, elapsed_time;
-			
+
 			if (sslsock->is_client) {
 				n = SSL_connect(sslsock->ssl_handle);
 			} else {
@@ -1870,7 +1870,7 @@ static int php_openssl_enable_crypto(php_stream *stream,
 			if (has_timeout) {
 				gettimeofday(&cur_time, NULL);
 				elapsed_time = php_openssl_subtract_timeval(cur_time, start_time);
-			
+
 				if (php_openssl_compare_timeval( elapsed_time, *timeout) > 0) {
 					php_error_docref(NULL, E_WARNING, "SSL: Handshake timed out");
 					return -1;
@@ -2066,7 +2066,7 @@ static size_t php_openssl_sockop_io(int read, php_stream *stream, char *buf, siz
 				if (errno == EAGAIN && err == SSL_ERROR_WANT_WRITE && read == 0) {
 					retry = 1;
 				}
-				
+
 				/* Also, on reads, we may get this condition on an EOF. We should check properly. */
 				if (read) {
 					stream->eof = (retry == 0 && errno != EAGAIN && !SSL_pending(sslsock->ssl_handle));
@@ -2110,7 +2110,7 @@ static size_t php_openssl_sockop_io(int read, php_stream *stream, char *buf, siz
 				}
 			}
 
-			/* Finally, we keep going until we got data, and an SSL_ERROR_NONE, unless we had an error. */			
+			/* Finally, we keep going until we got data, and an SSL_ERROR_NONE, unless we had an error. */
 		} while (retry);
 
 		/* Tell PHP if we read / wrote bytes. */
@@ -2259,7 +2259,7 @@ static inline int php_openssl_tcp_sockop_accept(php_stream *stream, php_openssl_
 	int clisock;
 	zend_bool nodelay = 0;
 	zval *tmpzval = NULL;
-	
+
 	xparam->outputs.client = NULL;
 
 	if ((tmpzval = php_stream_context_get_option(PHP_STREAM_CONTEXT(stream), "socket", "tcp_nodelay")) != NULL &&

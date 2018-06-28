@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -256,10 +256,7 @@ PHP_METHOD(mysqli_warning, __construct)
 	MYSQLI_WARNING  *w;
 	MYSQLI_RESOURCE *mysqli_resource;
 
-	if (ZEND_NUM_ARGS() != 1) {
-		WRONG_PARAM_COUNT;
-	}
-	if (zend_parse_parameters(1, "o", &z)==FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o", &z) == FAILURE) {
 		return;
 	}
 	obj = Z_MYSQLI_P(z);

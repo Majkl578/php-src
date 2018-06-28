@@ -1,5 +1,4 @@
 
-	/* $Id: fpm_unix.c,v 1.25.2.1 2008/12/13 03:18:23 anight Exp $ */
 	/* (c) 2007,2008 Andrei Nigmatulin */
 
 #include "fpm_config.h"
@@ -398,7 +397,7 @@ int fpm_unix_init_child(struct fpm_worker_pool_s *wp) /* {{{ */
 	}
 
 #ifdef HAVE_PRCTL
-	if (0 > prctl(PR_SET_DUMPABLE, 1, 0, 0, 0)) {
+	if (wp->config->process_dumpable && 0 > prctl(PR_SET_DUMPABLE, 1, 0, 0, 0)) {
 		zlog(ZLOG_SYSERROR, "[pool %s] failed to prctl(PR_SET_DUMPABLE)", wp->config->name);
 	}
 #endif

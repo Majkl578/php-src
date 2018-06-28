@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -724,7 +724,7 @@ static int sqlite3_do_callback(struct php_sqlite3_fci *fc, zval *cb, int argc, s
 		if (Z_ISUNDEF(agg_context->zval_context)) {
 			ZVAL_NULL(&agg_context->zval_context);
 		}
-		ZVAL_DUP(&zargs[0], &agg_context->zval_context);
+		ZVAL_COPY(&zargs[0], &agg_context->zval_context);
 		ZVAL_LONG(&zargs[1], agg_context->row_count);
 	}
 
@@ -858,7 +858,7 @@ static void php_sqlite3_callback_final(sqlite3_context *context) /* {{{ */
 static int php_sqlite3_callback_compare(void *coll, int a_len, const void *a, int b_len, const void* b) /* {{{ */
 {
 	php_sqlite3_collation *collation = (php_sqlite3_collation*)coll;
-	zval *zargs = NULL;
+	zval zargs[2];
 	zval retval;
 	int ret;
 
@@ -868,7 +868,6 @@ static int php_sqlite3_callback_compare(void *coll, int a_len, const void *a, in
 	collation->fci.fci.retval = &retval;
 	collation->fci.fci.param_count = 2;
 
-	zargs = safe_emalloc(2, sizeof(zval), 0);
 	ZVAL_STRINGL(&zargs[0], a, a_len);
 	ZVAL_STRINGL(&zargs[1], b, b_len);
 
@@ -885,7 +884,6 @@ static int php_sqlite3_callback_compare(void *coll, int a_len, const void *a, in
 
 	zval_ptr_dtor(&zargs[0]);
 	zval_ptr_dtor(&zargs[1]);
-	efree(zargs);
 
 	if (EG(exception)) {
 		ret = 0;
@@ -931,7 +929,7 @@ PHP_METHOD(sqlite3, createFunction)
 	if (!zend_is_callable(callback_func, 0, NULL)) {
 		zend_string *callback_name = zend_get_callable_name(callback_func);
 		php_sqlite3_error(db_obj, "Not a valid callback function %s", ZSTR_VAL(callback_name));
-		zend_string_release(callback_name);
+		zend_string_release_ex(callback_name, 0);
 		RETURN_FALSE;
 	}
 
@@ -980,14 +978,14 @@ PHP_METHOD(sqlite3, createAggregate)
 	if (!zend_is_callable(step_callback, 0, NULL)) {
 		zend_string *callback_name = zend_get_callable_name(step_callback);
 		php_sqlite3_error(db_obj, "Not a valid callback function %s", ZSTR_VAL(callback_name));
-		zend_string_release(callback_name);
+		zend_string_release_ex(callback_name, 0);
 		RETURN_FALSE;
 	}
 
 	if (!zend_is_callable(fini_callback, 0, NULL)) {
 		zend_string *callback_name = zend_get_callable_name(fini_callback);
 		php_sqlite3_error(db_obj, "Not a valid callback function %s", ZSTR_VAL(callback_name));
-		zend_string_release(callback_name);
+		zend_string_release_ex(callback_name, 0);
 		RETURN_FALSE;
 	}
 
@@ -1036,7 +1034,7 @@ PHP_METHOD(sqlite3, createCollation)
 	if (!zend_is_callable(callback_func, 0, NULL)) {
 		zend_string *callback_name = zend_get_callable_name(callback_func);
 		php_sqlite3_error(db_obj, "Not a valid callback function %s", ZSTR_VAL(callback_name));
-		zend_string_release(callback_name);
+		zend_string_release_ex(callback_name, 0);
 		RETURN_FALSE;
 	}
 
@@ -1431,7 +1429,7 @@ static int register_bound_parameter_to_sqlite(struct php_sqlite3_bound_param *pa
 
 	if (param->param_number < 1) {
 		if (param->name) {
-			zend_string_release(param->name);
+			zend_string_release_ex(param->name, 0);
 		}
 		return 0;
 	}
@@ -1522,8 +1520,8 @@ PHP_METHOD(sqlite3stmt, bindValue)
 	param.param_number = -1;
 	param.type = SQLITE3_TEXT;
 
-	if (zend_parse_parameters_ex(ZEND_PARSE_PARAMS_QUIET, ZEND_NUM_ARGS(), "lz/|l", &param.param_number, &parameter, &param.type) == FAILURE) {
-		if (zend_parse_parameters(ZEND_NUM_ARGS(), "Sz/|l", &param.name, &parameter, &param.type) == FAILURE) {
+	if (zend_parse_parameters_ex(ZEND_PARSE_PARAMS_QUIET, ZEND_NUM_ARGS(), "lz|l", &param.param_number, &parameter, &param.type) == FAILURE) {
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "Sz|l", &param.name, &parameter, &param.type) == FAILURE) {
 			return;
 		}
 	}
@@ -1616,7 +1614,7 @@ PHP_METHOD(sqlite3stmt, execute)
 
 					if (buffer) {
 						sqlite3_bind_blob(stmt_obj->stmt, param->param_number, ZSTR_VAL(buffer), ZSTR_LEN(buffer), SQLITE_TRANSIENT);
-						zend_string_release(buffer);
+						zend_string_release_ex(buffer, 0);
 					} else {
 						sqlite3_bind_null(stmt_obj->stmt, param->param_number);
 					}
@@ -1671,7 +1669,7 @@ PHP_METHOD(sqlite3stmt, execute)
 }
 /* }}} */
 
-/* {{{ proto int SQLite3Stmt::__construct(SQLite3 dbobject, String Statement)
+/* {{{ proto SQLite3Stmt::__construct(SQLite3 dbobject, String Statement)
    __constructor for SQLite3Stmt. */
 PHP_METHOD(sqlite3stmt, __construct)
 {
@@ -1893,7 +1891,7 @@ PHP_METHOD(sqlite3result, finalize)
 }
 /* }}} */
 
-/* {{{ proto int SQLite3Result::__construct()
+/* {{{ proto SQLite3Result::__construct()
    __constructor for SQLite3Result. */
 PHP_METHOD(sqlite3result, __construct)
 {
@@ -2255,7 +2253,7 @@ static void sqlite3_param_dtor(zval *data) /* {{{ */
 	struct php_sqlite3_bound_param *param = (struct php_sqlite3_bound_param*)Z_PTR_P(data);
 
 	if (param->name) {
-		zend_string_release(param->name);
+		zend_string_release_ex(param->name, 0);
 	}
 
 	if (!Z_ISNULL(param->parameter)) {
@@ -2280,9 +2278,9 @@ PHP_MINIT_FUNCTION(sqlite3)
 	}
 #endif
 
-	memcpy(&sqlite3_object_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
-	memcpy(&sqlite3_stmt_object_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
-	memcpy(&sqlite3_result_object_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+	memcpy(&sqlite3_object_handlers, &std_object_handlers, sizeof(zend_object_handlers));
+	memcpy(&sqlite3_stmt_object_handlers, &std_object_handlers, sizeof(zend_object_handlers));
+	memcpy(&sqlite3_result_object_handlers, &std_object_handlers, sizeof(zend_object_handlers));
 
 	/* Register SQLite 3 Class */
 	INIT_CLASS_ENTRY(ce, "SQLite3", php_sqlite3_class_methods);

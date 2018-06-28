@@ -171,9 +171,6 @@ static void _breakiterator_parts_move_forward(zend_object_iterator *iter)
 	size_t		slen = Z_STRLEN(bio->text);
 	zend_string	*res;
 
-	if (next == BreakIterator::DONE) {
-		next = (int32_t)slen;
-	}
 	assert(next <= slen && next >= cur);
 	res = zend_string_alloc(next - cur, 0);
 
@@ -266,7 +263,7 @@ U_CFUNC zend_function *IntlPartsIterator_get_method(zend_object **object_ptr, ze
 		}
 	}
 
-	ret = std_object_handlers.get_method(object_ptr, method, key);
+	ret = zend_std_get_method(object_ptr, method, key);
 
 end:
 	if (key == NULL) {

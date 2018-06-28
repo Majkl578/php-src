@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -1842,7 +1842,7 @@ static PHP_MINIT_FUNCTION(xmlwriter)
 	zend_class_entry ce;
 	le_xmlwriter = zend_register_list_destructors_ex(xmlwriter_dtor, NULL, "xmlwriter", module_number);
 
-	memcpy(&xmlwriter_object_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+	memcpy(&xmlwriter_object_handlers, &std_object_handlers, sizeof(zend_object_handlers));
 	xmlwriter_object_handlers.offset = XtOffsetOf(ze_xmlwriter_object, std);
 	xmlwriter_object_handlers.free_obj = xmlwriter_object_free_storage;
 	xmlwriter_object_handlers.clone_obj = NULL;

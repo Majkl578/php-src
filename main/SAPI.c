@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -780,7 +780,7 @@ SAPI_API int sapi_header_op(sapi_header_op_enum op, void *arg)
 				if (!strncmp(ptr, "image/", sizeof("image/")-1)) {
 					zend_string *key = zend_string_init("zlib.output_compression", sizeof("zlib.output_compression")-1, 0);
 					zend_alter_ini_entry_chars(key, "0", sizeof("0") - 1, PHP_INI_USER, PHP_INI_STAGE_RUNTIME);
-					zend_string_release(key);
+					zend_string_release_ex(key, 0);
 				}
 
 				mimetype = estrdup(ptr);
@@ -809,7 +809,7 @@ SAPI_API int sapi_header_op(sapi_header_op_enum op, void *arg)
 				zend_string *key = zend_string_init("zlib.output_compression", sizeof("zlib.output_compression")-1, 0);
 				zend_alter_ini_entry_chars(key,
 					"0", sizeof("0") - 1, PHP_INI_USER, PHP_INI_STAGE_RUNTIME);
-				zend_string_release(key);
+				zend_string_release_ex(key, 0);
 			} else if (!strcasecmp(header_line, "Location")) {
 				if ((SG(sapi_headers).http_response_code < 300 ||
 					SG(sapi_headers).http_response_code > 399) &&
@@ -868,7 +868,7 @@ SAPI_API int sapi_send_headers(void)
 
 			memcpy(default_header.header, "Content-type: ", sizeof("Content-type: ") - 1);
 			memcpy(default_header.header + sizeof("Content-type: ") - 1, SG(sapi_headers).mimetype, len + 1);
-			
+
 			sapi_header_add_op(SAPI_HEADER_ADD, &default_header);
 		} else {
 			efree(default_mimetype);
@@ -957,7 +957,7 @@ SAPI_API int sapi_register_post_entry(const sapi_post_entry *post_entry)
 	GC_MAKE_PERSISTENT_LOCAL(key);
 	ret = zend_hash_add_mem(&SG(known_post_content_types), key,
 			(void *) post_entry, sizeof(sapi_post_entry)) ? SUCCESS : FAILURE;
-	zend_string_release(key);
+	zend_string_release_ex(key, 1);
 	return ret;
 }
 

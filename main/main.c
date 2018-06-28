@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -1053,29 +1053,8 @@ static ZEND_COLD void php_error_cb(int type, const char *error_filename, const u
 		display = 1;
 	}
 
-	/* store the error if it has changed */
-	if (display) {
-		if (PG(last_error_message)) {
-			char *s = PG(last_error_message);
-			PG(last_error_message) = NULL;
-			free(s);
-		}
-		if (PG(last_error_file)) {
-			char *s = PG(last_error_file);
-			PG(last_error_file) = NULL;
-			free(s);
-		}
-		if (!error_filename) {
-			error_filename = "Unknown";
-		}
-		PG(last_error_type) = type;
-		PG(last_error_message) = strdup(buffer);
-		PG(last_error_file) = strdup(error_filename);
-		PG(last_error_lineno) = error_lineno;
-	}
-
-	/* according to error handling mode, suppress error, throw exception or show it */
-	if (EG(error_handling) != EH_NORMAL) {
+	/* according to error handling mode, throw exception or show it */
+	if (EG(error_handling) == EH_THROW) {
 		switch (type) {
 			case E_ERROR:
 			case E_CORE_ERROR:
@@ -1097,12 +1076,33 @@ static ZEND_COLD void php_error_cb(int type, const char *error_filename, const u
 				/* throw an exception if we are in EH_THROW mode
 				 * but DO NOT overwrite a pending exception
 				 */
-				if (EG(error_handling) == EH_THROW && !EG(exception)) {
+				if (!EG(exception)) {
 					zend_throw_error_exception(EG(exception_class), buffer, 0, type);
 				}
 				efree(buffer);
 				return;
 		}
+	}
+
+	/* store the error if it has changed */
+	if (display) {
+		if (PG(last_error_message)) {
+			char *s = PG(last_error_message);
+			PG(last_error_message) = NULL;
+			free(s);
+		}
+		if (PG(last_error_file)) {
+			char *s = PG(last_error_file);
+			PG(last_error_file) = NULL;
+			free(s);
+		}
+		if (!error_filename) {
+			error_filename = "Unknown";
+		}
+		PG(last_error_type) = type;
+		PG(last_error_message) = strdup(buffer);
+		PG(last_error_file) = strdup(error_filename);
+		PG(last_error_lineno) = error_lineno;
 	}
 
 	/* display/log the error if necessary */
@@ -1366,7 +1366,7 @@ PHP_FUNCTION(set_time_limit)
 	} else {
 		RETVAL_FALSE;
 	}
-	zend_string_release(key);
+	zend_string_release_ex(key, 0);
 	efree(new_timeout_str);
 }
 /* }}} */
@@ -2051,7 +2051,7 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 	REGISTER_MAIN_LONG_CONSTANT("PHP_DEBUG", PHP_DEBUG, CONST_PERSISTENT | CONST_CS);
 	REGISTER_MAIN_STRINGL_CONSTANT("PHP_OS", php_os, strlen(php_os), CONST_PERSISTENT | CONST_CS);
 	REGISTER_MAIN_STRINGL_CONSTANT("PHP_OS_FAMILY", PHP_OS_FAMILY, sizeof(PHP_OS_FAMILY)-1, CONST_PERSISTENT | CONST_CS);
-	REGISTER_MAIN_STRINGL_CONSTANT("PHP_SAPI", sapi_module.name, strlen(sapi_module.name), CONST_PERSISTENT | CONST_CS);
+	REGISTER_MAIN_STRINGL_CONSTANT("PHP_SAPI", sapi_module.name, strlen(sapi_module.name), CONST_PERSISTENT | CONST_CS | CONST_NO_FILE_CACHE);
 	REGISTER_MAIN_STRINGL_CONSTANT("DEFAULT_INCLUDE_PATH", PHP_INCLUDE_PATH, sizeof(PHP_INCLUDE_PATH)-1, CONST_PERSISTENT | CONST_CS);
 	REGISTER_MAIN_STRINGL_CONSTANT("PEAR_INSTALL_DIR", PEAR_INSTALLDIR, sizeof(PEAR_INSTALLDIR)-1, CONST_PERSISTENT | CONST_CS);
 	REGISTER_MAIN_STRINGL_CONSTANT("PEAR_EXTENSION_DIR", PHP_EXTENSION_DIR, sizeof(PHP_EXTENSION_DIR)-1, CONST_PERSISTENT | CONST_CS);
@@ -2095,9 +2095,9 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 
 	php_binary_init();
 	if (PG(php_binary)) {
-		REGISTER_MAIN_STRINGL_CONSTANT("PHP_BINARY", PG(php_binary), strlen(PG(php_binary)), CONST_PERSISTENT | CONST_CS);
+		REGISTER_MAIN_STRINGL_CONSTANT("PHP_BINARY", PG(php_binary), strlen(PG(php_binary)), CONST_PERSISTENT | CONST_CS | CONST_NO_FILE_CACHE);
 	} else {
-		REGISTER_MAIN_STRINGL_CONSTANT("PHP_BINARY", "", 0, CONST_PERSISTENT | CONST_CS);
+		REGISTER_MAIN_STRINGL_CONSTANT("PHP_BINARY", "", 0, CONST_PERSISTENT | CONST_CS | CONST_NO_FILE_CACHE);
 	}
 
 	php_output_register_constants();

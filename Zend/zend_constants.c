@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2018 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -28,19 +28,30 @@
 #include "zend_globals.h"
 #include "zend_API.h"
 
+/* Protection from recursive self-referencing class constants */
+#define IS_CONSTANT_VISITED_MARK    0x80
+
+#define IS_CONSTANT_VISITED(zv)     (Z_ACCESS_FLAGS_P(zv) & IS_CONSTANT_VISITED_MARK)
+#define MARK_CONSTANT_VISITED(zv)   Z_ACCESS_FLAGS_P(zv) |= IS_CONSTANT_VISITED_MARK
+#define RESET_CONSTANT_VISITED(zv)  Z_ACCESS_FLAGS_P(zv) &= ~IS_CONSTANT_VISITED_MARK
+
 void free_zend_constant(zval *zv)
 {
 	zend_constant *c = Z_PTR_P(zv);
 
 	if (!(c->flags & CONST_PERSISTENT)) {
 		zval_ptr_dtor(&c->value);
+		if (c->name) {
+			zend_string_release_ex(c->name, 0);
+		}
+		efree(c);
 	} else {
 		zval_internal_dtor(&c->value);
+		if (c->name) {
+			zend_string_release_ex(c->name, 1);
+		}
+		free(c);
 	}
-	if (c->name) {
-		zend_string_release(c->name);
-	}
-	pefree(c, c->flags & CONST_PERSISTENT);
 }
 
 
@@ -219,7 +230,7 @@ static zend_constant *zend_get_special_constant(const char *name, size_t name_le
 		haltname = zend_mangle_property_name(haltoff,
 			sizeof("__COMPILER_HALT_OFFSET__") - 1, cfilename, clen, 0);
 		c = zend_hash_find_ptr(EG(zend_constants), haltname);
-		zend_string_free(haltname);
+		zend_string_efree(haltname);
 		return c;
 	} else {
 		return NULL;
@@ -262,13 +273,17 @@ ZEND_API zval *zend_get_constant_str(const char *name, size_t name_len)
 
 ZEND_API zval *zend_get_constant(zend_string *name)
 {
+    zval *zv;
 	zend_constant *c;
 	ALLOCA_FLAG(use_heap)
 
-	if ((c = zend_hash_find_ptr(EG(zend_constants), name)) == NULL) {
+	zv = zend_hash_find(EG(zend_constants), name);
+	if (zv == NULL) {
 		char *lcname = do_alloca(ZSTR_LEN(name) + 1, use_heap);
 		zend_str_tolower_copy(lcname, ZSTR_VAL(name), ZSTR_LEN(name));
-		if ((c = zend_hash_str_find_ptr(EG(zend_constants), lcname, ZSTR_LEN(name))) != NULL) {
+		zv = zend_hash_str_find(EG(zend_constants), lcname, ZSTR_LEN(name));
+		if (zv != NULL) {
+			c = Z_PTR_P(zv);
 			if (c->flags & CONST_CS) {
 				c = NULL;
 			}
@@ -276,9 +291,10 @@ ZEND_API zval *zend_get_constant(zend_string *name)
 			c = zend_get_special_constant(ZSTR_VAL(name), ZSTR_LEN(name));
 		}
 		free_alloca(lcname, use_heap);
+		return c ? &c->value : NULL;
+	} else {
+		return &((zend_constant*)Z_PTR_P(zv))->value;
 	}
-
-	return c ? &c->value : NULL;
 }
 
 ZEND_API zval *zend_get_constant_ex(zend_string *cname, zend_class_entry *scope, uint32_t flags)
@@ -348,24 +364,26 @@ ZEND_API zval *zend_get_constant_ex(zend_string *cname, zend_class_entry *scope,
 		}
 
 		if (ret_constant && Z_TYPE_P(ret_constant) == IS_CONSTANT_AST) {
-			if (Z_TYPE_P(ret_constant) == IS_CONSTANT_AST) {
-				if (IS_CONSTANT_VISITED(ret_constant)) {
-					zend_throw_error(NULL, "Cannot declare self-referencing constant '%s::%s'", ZSTR_VAL(class_name), ZSTR_VAL(constant_name));
-					ret_constant = NULL;
-					goto failure;
-				}
-				MARK_CONSTANT_VISITED(ret_constant);
-			}
-			if (UNEXPECTED(zval_update_constant_ex(ret_constant, c->ce) != SUCCESS)) {
-				RESET_CONSTANT_VISITED(ret_constant);
+			int ret;
+
+			if (IS_CONSTANT_VISITED(ret_constant)) {
+				zend_throw_error(NULL, "Cannot declare self-referencing constant '%s::%s'", ZSTR_VAL(class_name), ZSTR_VAL(constant_name));
 				ret_constant = NULL;
 				goto failure;
 			}
+
+			MARK_CONSTANT_VISITED(ret_constant);
+			ret = zval_update_constant_ex(ret_constant, c->ce);
 			RESET_CONSTANT_VISITED(ret_constant);
+
+			if (UNEXPECTED(ret != SUCCESS)) {
+				ret_constant = NULL;
+				goto failure;
+			}
 		}
 failure:
-		zend_string_release(class_name);
-		zend_string_free(constant_name);
+		zend_string_release_ex(class_name, 0);
+		zend_string_efree(constant_name);
 		return ret_constant;
 	}
 

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2018 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -92,8 +92,12 @@ static zend_always_inline zval* zend_assign_to_variable(zval *variable_ptr, zval
 			garbage = Z_COUNTED_P(variable_ptr);
 			if (GC_DELREF(garbage) == 0) {
 				ZVAL_COPY_VALUE(variable_ptr, value);
-				if (value_type & (IS_CONST|IS_CV)) {
+				if (ZEND_CONST_COND(value_type  == IS_CONST, 0)) {
 					if (UNEXPECTED(Z_OPT_REFCOUNTED_P(variable_ptr))) {
+						Z_ADDREF_P(variable_ptr);
+					}
+				} else if (value_type & (IS_CONST|IS_CV)) {
+					if (Z_OPT_REFCOUNTED_P(variable_ptr)) {
 						Z_ADDREF_P(variable_ptr);
 					}
 				} else if (ZEND_CONST_COND(value_type == IS_VAR, 1) && UNEXPECTED(ref)) {
@@ -115,8 +119,12 @@ static zend_always_inline zval* zend_assign_to_variable(zval *variable_ptr, zval
 	} while (0);
 
 	ZVAL_COPY_VALUE(variable_ptr, value);
-	if (value_type & (IS_CONST|IS_CV)) {
+	if (ZEND_CONST_COND(value_type == IS_CONST, 0)) {
 		if (UNEXPECTED(Z_OPT_REFCOUNTED_P(variable_ptr))) {
+			Z_ADDREF_P(variable_ptr);
+		}
+	} else if (value_type & (IS_CONST|IS_CV)) {
+		if (Z_OPT_REFCOUNTED_P(variable_ptr)) {
 			Z_ADDREF_P(variable_ptr);
 		}
 	} else if (ZEND_CONST_COND(value_type == IS_VAR, 1) && UNEXPECTED(ref)) {
@@ -218,9 +226,8 @@ static zend_always_inline void zend_vm_stack_free_extra_args_ex(uint32_t call_in
 {
 	if (UNEXPECTED(call_info & ZEND_CALL_FREE_EXTRA_ARGS)) {
 		uint32_t count = ZEND_CALL_NUM_ARGS(call) - call->func->op_array.num_args;
-		zval *p = ZEND_CALL_VAR_NUM(call, call->func->op_array.last_var + call->func->op_array.T + count);
+		zval *p = ZEND_CALL_VAR_NUM(call, call->func->op_array.last_var + call->func->op_array.T);
 		do {
-			p--;
 			if (Z_REFCOUNTED_P(p)) {
 				zend_refcounted *r = Z_COUNTED_P(p);
 				if (!GC_DELREF(r)) {
@@ -230,6 +237,7 @@ static zend_always_inline void zend_vm_stack_free_extra_args_ex(uint32_t call_in
 					gc_check_possible_root(r);
 				}
 			}
+			p++;
 		} while (--count);
  	}
 }
@@ -244,19 +252,18 @@ static zend_always_inline void zend_vm_stack_free_args(zend_execute_data *call)
 	uint32_t num_args = ZEND_CALL_NUM_ARGS(call);
 
 	if (EXPECTED(num_args > 0)) {
-		zval *end = ZEND_CALL_ARG(call, 1);
-		zval *p = end + num_args;
+		zval *p = ZEND_CALL_ARG(call, 1);
 
 		do {
-			p--;
 			if (Z_REFCOUNTED_P(p)) {
-				if (!Z_DELREF_P(p)) {
-					zend_refcounted *r = Z_COUNTED_P(p);
+				zend_refcounted *r = Z_COUNTED_P(p);
+				if (!GC_DELREF(r)) {
 					ZVAL_NULL(p);
 					zval_dtor_func(r);
 				}
 			}
-		} while (p != end);
+			p++;
+		} while (--num_args);
 	}
 }
 
@@ -300,6 +307,9 @@ ZEND_API ZEND_NORETURN void zend_timeout(int dummy);
 ZEND_API zend_class_entry *zend_fetch_class(zend_string *class_name, int fetch_type);
 ZEND_API zend_class_entry *zend_fetch_class_by_name(zend_string *class_name, const zval *key, int fetch_type);
 void zend_verify_abstract_class(zend_class_entry *ce);
+
+ZEND_API zend_function * ZEND_FASTCALL zend_fetch_function(zend_string *name);
+ZEND_API zend_function * ZEND_FASTCALL zend_fetch_function_str(const char *name, size_t len);
 
 ZEND_API void zend_fetch_dimension_const(zval *result, zval *container, zval *dim, int type);
 
@@ -362,6 +372,23 @@ ZEND_API int ZEND_FASTCALL zend_do_fcall_overloaded(zend_execute_data *call, zva
 		(slot)[0] = (ce); \
 		(slot)[1] = (ptr); \
 	} while (0)
+
+#define CACHE_SPECIAL (1<<0)
+
+#define IS_SPECIAL_CACHE_VAL(ptr) \
+	(((uintptr_t)(ptr)) & CACHE_SPECIAL)
+
+#define ENCODE_SPECIAL_CACHE_NUM(num) \
+	((void*)((((uintptr_t)(num)) << 1) | CACHE_SPECIAL))
+
+#define DECODE_SPECIAL_CACHE_NUM(ptr) \
+	(((uintptr_t)(ptr)) >> 1)
+
+#define ENCODE_SPECIAL_CACHE_PTR(ptr) \
+	((void*)(((uintptr_t)(ptr)) | CACHE_SPECIAL))
+
+#define DECODE_SPECIAL_CACHE_PTR(ptr) \
+	((void*)(((uintptr_t)(ptr)) & ~CACHE_SPECIAL))
 
 #define SKIP_EXT_OPLINE(opline) do { \
 		while (UNEXPECTED((opline)->opcode >= ZEND_EXT_STMT \

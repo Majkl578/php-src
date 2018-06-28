@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -172,7 +172,7 @@ static void php_hash_do_hash(INTERNAL_FUNCTION_PARAMETERS, int isfilename, zend_
 
 		php_hash_bin2hex(ZSTR_VAL(hex_digest), (unsigned char *) ZSTR_VAL(digest), ops->digest_size);
 		ZSTR_VAL(hex_digest)[2 * ops->digest_size] = 0;
-		zend_string_release(digest);
+		zend_string_release_ex(digest, 0);
 		RETURN_NEW_STR(hex_digest);
 	}
 }
@@ -307,7 +307,7 @@ static void php_hash_do_hash_hmac(INTERNAL_FUNCTION_PARAMETERS, int isfilename, 
 
 		php_hash_bin2hex(ZSTR_VAL(hex_digest), (unsigned char *) ZSTR_VAL(digest), ops->digest_size);
 		ZSTR_VAL(hex_digest)[2 * ops->digest_size] = 0;
-		zend_string_release(digest);
+		zend_string_release_ex(digest, 0);
 		RETURN_NEW_STR(hex_digest);
 	}
 }
@@ -375,7 +375,7 @@ static void php_hashcontext_ctor(INTERNAL_FUNCTION_PARAMETERS, zval *objval) {
 
 	if (options & PHP_HASH_HMAC) {
 		char *K = emalloc(ops->block_size);
-		int i;
+		int i, block_size;
 
 		memset(K, 0, ops->block_size);
 
@@ -390,7 +390,8 @@ static void php_hashcontext_ctor(INTERNAL_FUNCTION_PARAMETERS, zval *objval) {
 		}
 
 		/* XOR ipad */
-		for(i=0; i < ops->block_size; i++) {
+		block_size = ops->block_size;
+		for(i=0; i < block_size; i++) {
 			K[i] ^= 0x36;
 		}
 		ops->hash_update(context, (unsigned char *) K, ops->block_size);
@@ -434,7 +435,7 @@ PHP_FUNCTION(hash_update)
 }
 /* }}} */
 
-/* {{{ proto int hash_update_stream(HashContext context, resource handle[, integer length])
+/* {{{ proto int hash_update_stream(HashContext context, resource handle[, int length])
 Pump data into the hashing algorithm from an open stream */
 PHP_FUNCTION(hash_update_stream)
 {
@@ -528,10 +529,11 @@ PHP_FUNCTION(hash_final)
 	digest = zend_string_alloc(digest_len, 0);
 	hash->ops->hash_final((unsigned char *) ZSTR_VAL(digest), hash->context);
 	if (hash->options & PHP_HASH_HMAC) {
-		int i;
+		int i, block_size;
 
 		/* Convert K to opad -- 0x6A = 0x36 ^ 0x5C */
-		for(i=0; i < hash->ops->block_size; i++) {
+		block_size = hash->ops->block_size;
+		for(i=0; i < block_size; i++) {
 			hash->key[i] ^= 0x6A;
 		}
 
@@ -559,7 +561,7 @@ PHP_FUNCTION(hash_final)
 
 		php_hash_bin2hex(ZSTR_VAL(hex_digest), (unsigned char *) ZSTR_VAL(digest), digest_len);
 		ZSTR_VAL(hex_digest)[2 * digest_len] = 0;
-		zend_string_release(digest);
+		zend_string_release_ex(digest, 0);
 		RETURN_NEW_STR(hex_digest);
 	}
 }
@@ -880,7 +882,7 @@ PHP_FUNCTION(hash_equals)
 }
 /* }}} */
 
-/* {{{ proto void HashContext::__construct() */
+/* {{{ proto HashContext::__construct() */
 static PHP_METHOD(HashContext, __construct) {
 	/* Normally unreachable as private/final */
 	zend_throw_exception(zend_ce_error, "Illegal call to private/final constructor", 0);
@@ -935,7 +937,7 @@ static void mhash_init(INIT_FUNC_ARGS)
 			continue;
 		}
 
-		len = slprintf(buf, 127, "MHASH_%s", algorithm.mhash_name, strlen(algorithm.mhash_name));
+		len = slprintf(buf, 127, "MHASH_%s", algorithm.mhash_name);
 		zend_register_long_constant(buf, len, algorithm.value, CONST_CS | CONST_PERSISTENT, module_number);
 	}
 
@@ -1239,7 +1241,7 @@ PHP_MINIT_FUNCTION(hash)
 	php_hashcontext_ce->serialize = zend_class_serialize_deny;
 	php_hashcontext_ce->unserialize = zend_class_unserialize_deny;
 
-	memcpy(&php_hashcontext_handlers, zend_get_std_object_handlers(),
+	memcpy(&php_hashcontext_handlers, &std_object_handlers,
 	       sizeof(zend_object_handlers));
 	php_hashcontext_handlers.offset = XtOffsetOf(php_hashcontext_object, std);
 	php_hashcontext_handlers.dtor_obj = php_hashcontext_dtor;

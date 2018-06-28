@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -27,6 +27,7 @@
 
 static zend_class_entry *zend_test_interface;
 static zend_class_entry *zend_test_class;
+static zend_class_entry *zend_test_child_class;
 static zend_class_entry *zend_test_trait;
 static zend_object_handlers zend_test_class_handlers;
 
@@ -192,7 +193,12 @@ PHP_MINIT_FUNCTION(zend_test)
 	zend_test_class->create_object = zend_test_class_new;
 	zend_test_class->get_static_method = zend_test_class_static_method_get;
 
-	memcpy(&zend_test_class_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+	zend_declare_property_null(zend_test_class, "_StaticProp", sizeof("_StaticProp") - 1, ZEND_ACC_STATIC);
+
+	INIT_CLASS_ENTRY(class_entry, "_ZendTestChildClass", NULL);
+	zend_test_child_class = zend_register_internal_class_ex(&class_entry, zend_test_class);
+
+	memcpy(&zend_test_class_handlers, &std_object_handlers, sizeof(zend_object_handlers));
 	zend_test_class_handlers.get_method = zend_test_class_method_get;
 	zend_test_class_handlers.call_method = zend_test_class_call_method;
 
@@ -200,6 +206,8 @@ PHP_MINIT_FUNCTION(zend_test)
 	zend_test_trait = zend_register_internal_class(&class_entry);
 	zend_test_trait->ce_flags |= ZEND_ACC_TRAIT;
 	zend_declare_property_null(zend_test_trait, "testProp", sizeof("testProp")-1, ZEND_ACC_PUBLIC);
+
+	zend_register_class_alias("_ZendTestClassAlias", zend_test_class);
 	return SUCCESS;
 }
 

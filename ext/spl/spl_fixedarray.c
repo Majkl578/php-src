@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -346,7 +346,7 @@ static zval *spl_fixedarray_object_read_dimension(zval *object, zval *offset, in
 
 	if (type == BP_VAR_IS && intern->fptr_offset_has) {
 		SEPARATE_ARG_IF_REF(offset);
-		zend_call_method_with_1_params(object, intern->std.ce, &intern->fptr_offset_has, "offsetexists", rv, offset); 
+		zend_call_method_with_1_params(object, intern->std.ce, &intern->fptr_offset_has, "offsetexists", rv, offset);
 		if (UNEXPECTED(Z_ISUNDEF_P(rv))) {
 			zval_ptr_dtor(offset);
 			return NULL;
@@ -546,7 +546,7 @@ static int spl_fixedarray_object_count_elements(zval *object, zend_long *count) 
 }
 /* }}} */
 
-/* {{{ proto void SplFixedArray::__construct([int size])
+/* {{{ proto SplFixedArray::__construct([int size])
 */
 SPL_METHOD(SplFixedArray, __construct)
 {
@@ -574,7 +574,7 @@ SPL_METHOD(SplFixedArray, __construct)
 }
 /* }}} */
 
-/* {{{ proto void SplFixedArray::__wakeup()
+/* {{{ proto SplFixedArray::__wakeup()
 */
 SPL_METHOD(SplFixedArray, __wakeup)
 {
@@ -877,7 +877,6 @@ static zval *spl_fixedarray_it_get_current_data(zend_object_iterator *iter) /* {
 		ZVAL_LONG(&zindex, object->current);
 
 		data = spl_fixedarray_object_read_dimension_helper(object, &zindex);
-		zval_ptr_dtor(&zindex);
 
 		if (data == NULL) {
 			data = &EG(uninitialized_zval);
@@ -983,8 +982,6 @@ SPL_METHOD(SplFixedArray, current)
 
 	value = spl_fixedarray_object_read_dimension_helper(intern, &zindex);
 
-	zval_ptr_dtor(&zindex);
-
 	if (value) {
 		ZVAL_DEREF(value);
 		ZVAL_COPY(return_value, value);
@@ -1077,7 +1074,7 @@ static const zend_function_entry spl_funcs_SplFixedArray[] = { /* {{{ */
 PHP_MINIT_FUNCTION(spl_fixedarray)
 {
 	REGISTER_SPL_STD_CLASS_EX(SplFixedArray, spl_fixedarray_new, spl_funcs_SplFixedArray);
-	memcpy(&spl_handler_SplFixedArray, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+	memcpy(&spl_handler_SplFixedArray, &std_object_handlers, sizeof(zend_object_handlers));
 
 	spl_handler_SplFixedArray.offset          = XtOffsetOf(spl_fixedarray_object, std);
 	spl_handler_SplFixedArray.clone_obj       = spl_fixedarray_object_clone;

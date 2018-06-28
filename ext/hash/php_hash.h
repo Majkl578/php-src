@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -24,8 +24,8 @@
 #include "php.h"
 
 #define PHP_HASH_EXTNAME	"hash"
-#define PHP_HASH_VERSION	"1.0"
-#define PHP_MHASH_VERSION	"1.0"
+#define PHP_HASH_VERSION	PHP_VERSION
+#define PHP_MHASH_VERSION	PHP_VERSION
 
 #define PHP_HASH_HMAC		0x0001
 

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2018 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -416,14 +416,8 @@ static ZEND_COLD void zend_append_type_hint(smart_str *str, const zend_function 
 			smart_str_appendc(str, ' ');
 		}
 	} else if (ZEND_TYPE_IS_CODE(arg_info->type)) {
-		if (ZEND_TYPE_CODE(arg_info->type) == IS_LONG) {
-			smart_str_appendl(str, "int", 3);
-		} else if (ZEND_TYPE_CODE(arg_info->type) == _IS_BOOL) {
-			smart_str_appendl(str, "bool", 4);
-		} else {
-			const char *type_name = zend_get_type_by_const(ZEND_TYPE_CODE(arg_info->type));
-			smart_str_appends(str, type_name);
-		}
+		const char *type_name = zend_get_type_by_const(ZEND_TYPE_CODE(arg_info->type));
+		smart_str_appends(str, type_name);
 		if (!return_hint) {
 			smart_str_appendc(str, ' ');
 		}
@@ -631,8 +625,8 @@ static void do_inheritance_check_on_method(zend_function *child, zend_function *
 			error_verb = "should";
 		}
 		zend_error(error_level, "Declaration of %s %s be compatible with %s", ZSTR_VAL(child_prototype), error_verb, ZSTR_VAL(method_prototype));
-		zend_string_free(child_prototype);
-		zend_string_free(method_prototype);
+		zend_string_efree(child_prototype);
+		zend_string_efree(method_prototype);
 	}
 }
 /* }}} */
@@ -701,7 +695,7 @@ static void do_inherit_property(zend_property_info *parent_info, zend_string *ke
 			}
 		}
 	} else {
-		if (UNEXPECTED(parent_info->flags & (ZEND_ACC_PRIVATE|ZEND_ACC_SHADOW))) {
+		if (UNEXPECTED(parent_info->flags & ZEND_ACC_PRIVATE)) {
 			if (UNEXPECTED(ce->type & ZEND_INTERNAL_CLASS)) {
 				child_info = zend_duplicate_property_info_internal(parent_info);
 			} else {
@@ -902,19 +896,23 @@ ZEND_API void zend_do_inheritance(zend_class_entry *ce, zend_class_entry *parent
 			do {
 				dst--;
 				src--;
-				ZVAL_MAKE_REF(src);
-				ZVAL_COPY_VALUE(dst, src);
-				Z_ADDREF_P(dst);
+				if (Z_TYPE_P(src) == IS_INDIRECT) {
+					ZVAL_INDIRECT(dst, Z_INDIRECT_P(src));
+				} else {
+					ZVAL_INDIRECT(dst, src);
+				}
 			} while (dst != end);
 		} else if (ce->type == ZEND_USER_CLASS) {
 			src = parent_ce->default_static_members_table + parent_ce->default_static_members_count;
 			do {
 				dst--;
 				src--;
-				ZVAL_MAKE_REF(src);
-				ZVAL_COPY_VALUE(dst, src);
-				Z_ADDREF_P(dst);
-				if (Z_TYPE_P(Z_REFVAL_P(dst)) == IS_CONSTANT_AST) {
+				if (Z_TYPE_P(src) == IS_INDIRECT) {
+					ZVAL_INDIRECT(dst, Z_INDIRECT_P(src));
+				} else {
+					ZVAL_INDIRECT(dst, src);
+				}
+				if (Z_TYPE_P(Z_INDIRECT_P(dst)) == IS_CONSTANT_AST) {
 					ce->ce_flags &= ~ZEND_ACC_CONSTANTS_UPDATED;
 				}
 			} while (dst != end);
@@ -923,18 +921,16 @@ ZEND_API void zend_do_inheritance(zend_class_entry *ce, zend_class_entry *parent
 			do {
 				dst--;
 				src--;
-				if (!Z_ISREF_P(src)) {
-					ZVAL_NEW_PERSISTENT_REF(src, src);
+				if (Z_TYPE_P(src) == IS_INDIRECT) {
+					ZVAL_INDIRECT(dst, Z_INDIRECT_P(src));
+				} else {
+					ZVAL_INDIRECT(dst, src);
 				}
-				ZVAL_COPY_VALUE(dst, src);
-				Z_ADDREF_P(dst);
 			} while (dst != end);
 		}
 		ce->default_static_members_count += parent_ce->default_static_members_count;
 		if (ce->type == ZEND_USER_CLASS) {
 			ce->static_members_table = ce->default_static_members_table;
-		} else {
-			ce->ce_flags &= ~ZEND_ACC_CONSTANTS_UPDATED;
 		}
 	}
 
@@ -1164,7 +1160,7 @@ static void zend_add_magic_methods(zend_class_entry* ce, zend_string* mname, zen
 			ce->constructor = fe;
 			fe->common.fn_flags |= ZEND_ACC_CTOR;
 		}
-		zend_string_release(lowercase_name);
+		zend_string_release_ex(lowercase_name, 0);
 	}
 }
 /* }}} */
@@ -1294,7 +1290,7 @@ static int zend_traits_copy_functions(zend_string *fnname, zend_function *fn, ze
 
 				lcname = zend_string_tolower(alias->alias);
 				zend_add_trait_method(ce, ZSTR_VAL(alias->alias), lcname, &fn_copy, overriden);
-				zend_string_release(lcname);
+				zend_string_release_ex(lcname, 0);
 
 				/* Record the trait from which this alias was resolved. */
 				if (!alias->trait_method->ce) {
@@ -1386,7 +1382,7 @@ static void zend_traits_init_trait_structures(zend_class_entry *ce) /* {{{ */
 				lcname = zend_string_tolower(cur_method_ref->method_name);
 				method_exists = zend_hash_exists(&cur_method_ref->ce->function_table,
 												 lcname);
-				zend_string_release(lcname);
+				zend_string_release_ex(lcname, 0);
 				if (!method_exists) {
 					zend_error_noreturn(E_COMPILE_ERROR,
 							   "A precedence rule was defined for %s::%s but this method does not exist",
@@ -1420,7 +1416,7 @@ static void zend_traits_init_trait_structures(zend_class_entry *ce) /* {{{ */
 								   ZSTR_VAL(cur_precedence->trait_method->ce->name));
 					}
 
-					zend_string_release(class_name);
+					zend_string_release_ex(class_name, 0);
 					j++;
 				}
 			}
@@ -1444,7 +1440,7 @@ static void zend_traits_init_trait_structures(zend_class_entry *ce) /* {{{ */
 				lcname = zend_string_tolower(cur_method_ref->method_name);
 				method_exists = zend_hash_exists(&cur_method_ref->ce->function_table,
 						lcname);
-				zend_string_release(lcname);
+				zend_string_release_ex(lcname, 0);
 
 				if (!method_exists) {
 					zend_error_noreturn(E_COMPILE_ERROR, "An alias was defined for %s::%s but this method does not exist", ZSTR_VAL(cur_method_ref->ce->name), ZSTR_VAL(cur_method_ref->method_name));
@@ -1471,10 +1467,10 @@ static void zend_traits_compile_exclude_table(HashTable* exclude_table, zend_tra
 					zend_string *lcname =
 						zend_string_tolower(precedences[i]->trait_method->method_name);
 					if (zend_hash_add_empty_element(exclude_table, lcname) == NULL) {
-						zend_string_release(lcname);
+						zend_string_release_ex(lcname, 0);
 						zend_error_noreturn(E_COMPILE_ERROR, "Failed to evaluate a trait precedence (%s). Method of trait %s was defined to be excluded multiple times", ZSTR_VAL(precedences[i]->trait_method->method_name), ZSTR_VAL(trait->name));
 					}
-					zend_string_release(lcname);
+					zend_string_release_ex(lcname, 0);
 				}
 				++j;
 			}
@@ -1593,15 +1589,15 @@ static void zend_do_traits_property_binding(zend_class_entry *ce) /* {{{ */
 			/* next: check for conflicts with current class */
 			if ((coliding_prop = zend_hash_find_ptr(&ce->properties_info, prop_name)) != NULL) {
 				if (coliding_prop->flags & ZEND_ACC_SHADOW) {
-					zend_string_release(coliding_prop->name);
+					zend_string_release_ex(coliding_prop->name, 0);
 					if (coliding_prop->doc_comment) {
-						zend_string_release(coliding_prop->doc_comment);
+						zend_string_release_ex(coliding_prop->doc_comment, 0);
                     }
 					zend_hash_del(&ce->properties_info, prop_name);
 					flags |= ZEND_ACC_CHANGED;
 				} else {
 					not_compatible = 1;
-					
+
 					if ((coliding_prop->flags & (ZEND_ACC_PPP_MASK | ZEND_ACC_STATIC))
 						== (flags & (ZEND_ACC_PPP_MASK | ZEND_ACC_STATIC))) {
 						/* the flags are identical, thus, the properties may be compatible */
@@ -1611,8 +1607,8 @@ static void zend_do_traits_property_binding(zend_class_entry *ce) /* {{{ */
 						if (flags & ZEND_ACC_STATIC) {
 							op1 = &ce->default_static_members_table[coliding_prop->offset];
 							op2 = &ce->traits[i]->default_static_members_table[property_info->offset];
-							ZVAL_DEREF(op1);
-							ZVAL_DEREF(op2);
+							ZVAL_DEINDIRECT(op1);
+							ZVAL_DEINDIRECT(op2);
 						} else {
 							op1 = &ce->default_properties_table[OBJ_PROP_TO_NUM(coliding_prop->offset)];
 							op2 = &ce->traits[i]->default_properties_table[OBJ_PROP_TO_NUM(property_info->offset)];
@@ -1649,7 +1645,7 @@ static void zend_do_traits_property_binding(zend_class_entry *ce) /* {{{ */
 								ZSTR_VAL(ce->name));
 					}
 
-					zend_string_release(prop_name);
+					zend_string_release_ex(prop_name, 0);
 					continue;
 				}
 			}
@@ -1657,6 +1653,7 @@ static void zend_do_traits_property_binding(zend_class_entry *ce) /* {{{ */
 			/* property not found, so lets add it */
 			if (flags & ZEND_ACC_STATIC) {
 				prop_value = &ce->traits[i]->default_static_members_table[property_info->offset];
+				ZEND_ASSERT(Z_TYPE_P(prop_value) != IS_INDIRECT);
 			} else {
 				prop_value = &ce->traits[i]->default_properties_table[OBJ_PROP_TO_NUM(property_info->offset)];
 			}
@@ -1666,7 +1663,7 @@ static void zend_do_traits_property_binding(zend_class_entry *ce) /* {{{ */
 			zend_declare_property_ex(ce, prop_name,
 									 prop_value, flags,
 								     doc_comment);
-			zend_string_release(prop_name);
+			zend_string_release_ex(prop_name, 0);
 		} ZEND_HASH_FOREACH_END();
 	}
 }
@@ -1703,12 +1700,12 @@ static void zend_do_check_for_inconsistent_traits_aliasing(zend_class_entry *ce)
 						cur_alias->trait_method->method_name);
 					if (zend_hash_exists(&ce->function_table,
 										 lc_method_name)) {
-						zend_string_release(lc_method_name);
+						zend_string_release_ex(lc_method_name, 0);
 						zend_error_noreturn(E_COMPILE_ERROR,
 								   "The modifiers for the trait alias %s() need to be changed in the same statement in which the alias is defined. Error",
 								   ZSTR_VAL(cur_alias->trait_method->method_name));
 					} else {
-						zend_string_release(lc_method_name);
+						zend_string_release_ex(lc_method_name, 0);
 						zend_error_noreturn(E_COMPILE_ERROR,
 								   "The modifiers of the trait method %s() are changed, but this method does not exist. Error",
 								   ZSTR_VAL(cur_alias->trait_method->method_name));

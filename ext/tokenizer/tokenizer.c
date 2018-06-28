@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -144,8 +144,7 @@ static zend_bool tokenize(zval *return_value, zend_string *source)
 	LANG_SCNG(yy_state) = yycINITIAL;
 	array_init(return_value);
 
-	ZVAL_UNDEF(&token);
-	while ((token_type = lex_scan(&token))) {
+	while ((token_type = lex_scan(&token, NULL))) {
 		add_token(return_value, token_type, zendtext, zendleng, token_line);
 
 		if (Z_TYPE(token) != IS_UNDEF) {
@@ -192,8 +191,16 @@ void on_event(zend_php_scanner_event event, int token, int line, void *context)
 
 	switch (event) {
 		case ON_TOKEN:
-			if (token == END) break;
-			add_token(token_stream, token, LANG_SCNG(yy_text), LANG_SCNG(yy_leng), line);
+			{
+				if (token == END) break;
+				/* Special cases */
+				if (token == ';' && LANG_SCNG(yy_leng) > 1) { /* ?> or ?>\n or ?>\r\n */
+					token = T_CLOSE_TAG;
+				} else if (token == T_ECHO && LANG_SCNG(yy_leng) == sizeof("<?=") - 1) {
+					token = T_OPEN_TAG_WITH_ECHO;
+				}
+				add_token(token_stream, token, LANG_SCNG(yy_text), LANG_SCNG(yy_leng), line);
+			}
 			break;
 		case ON_FEEDBACK:
 			tokens_ht = Z_ARRVAL_P(token_stream);

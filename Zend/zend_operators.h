@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2017 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2018 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -208,7 +208,7 @@ static zend_always_inline const void *zend_memrchr(const void *s, int c, size_t 
 
 
 static zend_always_inline const char *
-zend_memnrstr(const char *haystack, const char *needle, size_t needle_len, char *end)
+zend_memnrstr(const char *haystack, const char *needle, size_t needle_len, const char *end)
 {
     const char *p = end;
     const char ne = needle[needle_len-1];
@@ -284,7 +284,7 @@ static zend_always_inline zend_string *zval_get_tmp_string(zval *op, zend_string
 }
 static zend_always_inline void zend_tmp_string_release(zend_string *tmp) {
 	if (UNEXPECTED(tmp)) {
-		zend_string_release(tmp);
+		zend_string_release_ex(tmp, 0);
 	}
 }
 
@@ -386,6 +386,7 @@ ZEND_API int ZEND_FASTCALL zend_binary_strncasecmp(const char *s1, size_t len1, 
 ZEND_API int ZEND_FASTCALL zend_binary_strcasecmp_l(const char *s1, size_t len1, const char *s2, size_t len2);
 ZEND_API int ZEND_FASTCALL zend_binary_strncasecmp_l(const char *s1, size_t len1, const char *s2, size_t len2, size_t length);
 
+ZEND_API int ZEND_FASTCALL zendi_smart_streq(zend_string *s1, zend_string *s2);
 ZEND_API int ZEND_FASTCALL zendi_smart_strcmp(zend_string *s1, zend_string *s2);
 ZEND_API int ZEND_FASTCALL zend_compare_symbol_tables(HashTable *ht1, HashTable *ht2);
 ZEND_API int ZEND_FASTCALL zend_compare_arrays(zval *a1, zval *a2);
@@ -468,7 +469,7 @@ static zend_always_inline void fast_long_increment_function(zval *op1)
 {
 #if defined(HAVE_ASM_GOTO) && defined(__i386__)
 	__asm__ goto(
-		"incl (%0)\n\t"
+		"addl $1,(%0)\n\t"
 		"jo  %l1\n"
 		:
 		: "r"(&op1->value)
@@ -479,7 +480,7 @@ overflow: ZEND_ATTRIBUTE_COLD_LABEL
 	ZVAL_DOUBLE(op1, (double)ZEND_LONG_MAX + 1.0);
 #elif defined(HAVE_ASM_GOTO) && defined(__x86_64__)
 	__asm__ goto(
-		"incq (%0)\n\t"
+		"addq $1,(%0)\n\t"
 		"jo  %l1\n"
 		:
 		: "r"(&op1->value)
@@ -518,7 +519,7 @@ static zend_always_inline void fast_long_decrement_function(zval *op1)
 {
 #if defined(HAVE_ASM_GOTO) && defined(__i386__)
 	__asm__ goto(
-		"decl (%0)\n\t"
+		"subl $1,(%0)\n\t"
 		"jo  %l1\n"
 		:
 		: "r"(&op1->value)
@@ -529,7 +530,7 @@ overflow: ZEND_ATTRIBUTE_COLD_LABEL
 	ZVAL_DOUBLE(op1, (double)ZEND_LONG_MIN - 1.0);
 #elif defined(HAVE_ASM_GOTO) && defined(__x86_64__)
 	__asm__ goto(
-		"decq (%0)\n\t"
+		"subq $1,(%0)\n\t"
 		"jo  %l1\n"
 		:
 		: "r"(&op1->value)
@@ -728,7 +729,7 @@ static zend_always_inline int zend_fast_equal_strings(zend_string *s1, zend_stri
 	} else if (ZSTR_VAL(s1)[0] > '9' || ZSTR_VAL(s2)[0] > '9') {
 		return zend_string_equal_content(s1, s2);
 	} else {
-		return zendi_smart_strcmp(s1, s2) == 0;
+		return zendi_smart_streq(s1, s2);
 	}
 }
 

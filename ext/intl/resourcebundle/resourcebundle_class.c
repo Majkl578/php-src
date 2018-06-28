@@ -35,8 +35,8 @@ zend_class_entry *ResourceBundle_ce_ptr = NULL;
 
 static zend_object_handlers ResourceBundle_object_handlers;
 
-/* {{{ ResourceBundle_object_dtor */
-static void ResourceBundle_object_destroy( zend_object *object )
+/* {{{ ResourceBundle_object_free */
+static void ResourceBundle_object_free( zend_object *object )
 {
 	ResourceBundle_object *rb = php_intl_resourcebundle_fetch_object(object);
 
@@ -49,6 +49,8 @@ static void ResourceBundle_object_destroy( zend_object *object )
 	if (rb->child) {
 		ures_close( rb->child );
 	}
+
+	zend_object_std_dtor( &rb->zend );
 }
 /* }}} */
 
@@ -142,7 +144,7 @@ ZEND_BEGIN_ARG_INFO_EX( arginfo_resourcebundle___construct, 0, 0, 2 )
 ZEND_END_ARG_INFO()
 /* }}} */
 
-/* {{{ proto void ResourceBundle::__construct( string $locale [, string $bundlename [, bool $fallback = true ]] )
+/* {{{ proto ResourceBundle::__construct( string $locale [, string $bundlename [, bool $fallback = true ]] )
  * ResourceBundle object constructor
  */
 PHP_METHOD( ResourceBundle, __construct )
@@ -246,8 +248,8 @@ ZEND_BEGIN_ARG_INFO_EX( arginfo_resourcebundle_get, 0, 0, 1 )
 ZEND_END_ARG_INFO()
 /* }}} */
 
-/* {{{ proto mixed ResourceBundle::get( integer|string $resindex [, bool $fallback = true ] )
- * proto mixed resourcebundle_get( ResourceBundle $rb, integer|string $resindex [, bool $fallback = true ] )
+/* {{{ proto mixed ResourceBundle::get( int|string $resindex [, bool $fallback = true ] )
+ * proto mixed resourcebundle_get( ResourceBundle $rb, int|string $resindex [, bool $fallback = true ] )
  * Get resource identified by numerical index or key name.
  */
 PHP_FUNCTION( resourcebundle_get )
@@ -449,7 +451,7 @@ void resourcebundle_register_class( void )
 	ResourceBundle_object_handlers = std_object_handlers;
 	ResourceBundle_object_handlers.offset = XtOffsetOf(ResourceBundle_object, zend);
 	ResourceBundle_object_handlers.clone_obj	  = NULL; /* ICU ResourceBundle has no clone implementation */
-	ResourceBundle_object_handlers.dtor_obj = ResourceBundle_object_destroy;
+	ResourceBundle_object_handlers.free_obj = ResourceBundle_object_free;
 	ResourceBundle_object_handlers.read_dimension = resourcebundle_array_get;
 	ResourceBundle_object_handlers.count_elements = resourcebundle_array_count;
 

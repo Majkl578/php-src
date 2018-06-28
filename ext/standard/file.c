@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -22,8 +22,6 @@
 */
 
 /* $Id$ */
-
-/* Synced with php 3.0 revision 1.218 1999-06-16 [ssb] */
 
 /* {{{ includes */
 
@@ -517,7 +515,7 @@ PHP_FUNCTION(get_meta_tags)
 }
 /* }}} */
 
-/* {{{ proto string file_get_contents(string filename [, bool use_include_path [, resource context [, long offset [, long maxlen]]]])
+/* {{{ proto string file_get_contents(string filename [, bool use_include_path [, resource context [, int offset [, int maxlen]]]])
    Read the entire file into a string */
 PHP_FUNCTION(file_get_contents)
 {
@@ -843,7 +841,7 @@ PHP_FUNCTION(tempnam)
 		close(fd);
 		RETVAL_STR(opened_path);
 	}
-	zend_string_release(p);
+	zend_string_release_ex(p, 0);
 }
 /* }}} */
 
@@ -883,7 +881,7 @@ PHP_NAMED_FUNCTION(php_if_fopen)
 		Z_PARAM_STRING(mode, mode_len)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_BOOL(use_include_path)
-		Z_PARAM_RESOURCE(zcontext)
+		Z_PARAM_RESOURCE_EX(zcontext, 1, 0)
 	ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
 	context = php_stream_context_from_zval(zcontext, 0);
@@ -1047,7 +1045,7 @@ PHPAPI PHP_FUNCTION(fgets)
 
 		str = zend_string_alloc(len, 0);
 		if (php_stream_get_line(stream, ZSTR_VAL(str), len, &line_len) == NULL) {
-			zend_string_free(str);
+			zend_string_efree(str);
 			RETURN_FALSE;
 		}
 		/* resize buffer if it's much larger than the result.
@@ -1346,7 +1344,7 @@ PHP_FUNCTION(mkdir)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_LONG(mode)
 		Z_PARAM_BOOL(recursive)
-		Z_PARAM_RESOURCE(zcontext)
+		Z_PARAM_RESOURCE_EX(zcontext, 1, 0)
 	ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
 	context = php_stream_context_from_zval(zcontext, 0);
@@ -1367,7 +1365,7 @@ PHP_FUNCTION(rmdir)
 	ZEND_PARSE_PARAMETERS_START(1, 2)
 		Z_PARAM_PATH(dir, dir_len)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_RESOURCE(zcontext)
+		Z_PARAM_RESOURCE_EX(zcontext, 1, 0)
 	ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
 	context = php_stream_context_from_zval(zcontext, 0);
@@ -1469,7 +1467,7 @@ PHP_FUNCTION(rename)
 		Z_PARAM_PATH(old_name, old_name_len)
 		Z_PARAM_PATH(new_name, new_name_len)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_RESOURCE(zcontext)
+		Z_PARAM_RESOURCE_EX(zcontext, 1, 0)
 	ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
 	wrapper = php_stream_locate_url_wrapper(old_name, NULL, 0);
@@ -1508,7 +1506,7 @@ PHP_FUNCTION(unlink)
 	ZEND_PARSE_PARAMETERS_START(1, 2)
 		Z_PARAM_PATH(filename, filename_len)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_RESOURCE(zcontext)
+		Z_PARAM_RESOURCE_EX(zcontext, 1, 0)
 	ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
 	context = php_stream_context_from_zval(zcontext, 0);
@@ -1665,7 +1663,7 @@ PHP_FUNCTION(copy)
 		Z_PARAM_PATH(source, source_len)
 		Z_PARAM_PATH(target, target_len)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_RESOURCE(zcontext)
+		Z_PARAM_RESOURCE_EX(zcontext, 1, 0)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (php_check_open_basedir(source)) {

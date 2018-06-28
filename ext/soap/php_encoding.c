@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -848,7 +848,7 @@ static xmlNodePtr to_xml_string(encodeTypePtr type, zval *data, int style, xmlNo
 		zend_string *tmp = zval_get_string_func(data);
 		str = estrndup(ZSTR_VAL(tmp), ZSTR_LEN(tmp));
 		new_len = ZSTR_LEN(tmp);
-		zend_string_release(tmp);
+		zend_string_release_ex(tmp, 0);
 	}
 
 	if (SOAP_GLOBAL(encoding) != NULL) {
@@ -930,12 +930,12 @@ static xmlNodePtr to_xml_base64(encodeTypePtr type, zval *data, int style, xmlNo
 	} else {
 		zend_string *tmp = zval_get_string_func(data);
 		str = php_base64_encode((unsigned char*) ZSTR_VAL(tmp), ZSTR_LEN(tmp));
-		zend_string_release(tmp);
+		zend_string_release_ex(tmp, 0);
 	}
 
 	text = xmlNewTextLen(BAD_CAST(ZSTR_VAL(str)), ZSTR_LEN(str));
 	xmlAddChild(ret, text);
-	zend_string_release(str);
+	zend_string_release_ex(str, 0);
 
 	if (style == SOAP_ENCODED) {
 		set_ns_and_type(ret, type);
@@ -1066,7 +1066,7 @@ static xmlNodePtr to_xml_long(encodeTypePtr type, zval *data, int style, xmlNode
 	} else {
 		zend_string *str = zend_long_to_str(zval_get_long(data));
 		xmlNodeSetContentLen(ret, BAD_CAST(ZSTR_VAL(str)), ZSTR_LEN(str));
-		zend_string_release(str);
+		zend_string_release_ex(str, 0);
 	}
 
 	if (style == SOAP_ENCODED) {
@@ -1343,6 +1343,7 @@ static void model_to_zval_object(zval *ret, sdlContentModelPtr model, xmlNodePtr
 						array_init(&array);
 						add_next_index_zval(&array, &val);
 						do {
+							ZVAL_NULL(&val);
 							if (node && node->children && node->children->content) {
 								if (model->u.element->fixed && strcmp(model->u.element->fixed, (char*)node->children->content) != 0) {
 									soap_error3(E_ERROR, "Encoding: Element '%s' has fixed value '%s' (value '%s' is not allowed)", model->u.element->name, model->u.element->fixed, node->children->content);
@@ -3141,7 +3142,7 @@ static xmlNodePtr to_xml_any(encodeTypePtr type, zval *data, int style, xmlNodeP
 	} else {
 		zend_string *tmp = zval_get_string_func(data);
 		ret = xmlNewTextLen(BAD_CAST(ZSTR_VAL(tmp)), ZSTR_LEN(tmp));
-		zend_string_release(tmp);
+		zend_string_release_ex(tmp, 0);
 	}
 
 	ret->name = xmlStringTextNoenc;

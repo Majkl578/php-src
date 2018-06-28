@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.0 of the PHP license,       |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -217,7 +217,7 @@ PHP_MINIT_FUNCTION(finfo)
 	finfo_class_entry = zend_register_internal_class(&_finfo_class_entry);
 
 	/* copy the standard object handlers to you handler table */
-	memcpy(&finfo_object_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+	memcpy(&finfo_object_handlers, &std_object_handlers, sizeof(zend_object_handlers));
 	finfo_object_handlers.offset = XtOffsetOf(finfo_object, zo);
 	finfo_object_handlers.free_obj = finfo_objects_free;
 
@@ -278,7 +278,6 @@ PHP_MINFO_FUNCTION(fileinfo)
 
 	php_info_print_table_start();
 	php_info_print_table_row(2, "fileinfo support", "enabled");
-	php_info_print_table_row(2, "version", PHP_FILEINFO_VERSION);
 	php_info_print_table_row(2, "libmagic", magic_ver);
 	php_info_print_table_end();
 }

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -201,7 +201,7 @@ PHP_FUNCTION(random_bytes)
 	bytes = zend_string_alloc(size, 0);
 
 	if (php_random_bytes_throw(ZSTR_VAL(bytes), size) == FAILURE) {
-		zend_string_release(bytes);
+		zend_string_release_ex(bytes, 0);
 		return;
 	}
 

@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2017 The PHP Group                                |
+   | Copyright (c) 1997-2018 The PHP Group                                |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -71,6 +71,7 @@ typedef struct {
 } sysvshm_shm;
 
 PHP_MINIT_FUNCTION(sysvshm);
+PHP_MINFO_FUNCTION(sysvshm);
 PHP_FUNCTION(shm_attach);
 PHP_FUNCTION(shm_detach);
 PHP_FUNCTION(shm_remove);

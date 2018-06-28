@@ -10,7 +10,6 @@
 #include "fpm_scoreboard.h"
 #include "fpm_status.h"
 #include "fpm_clock.h"
-#include "fpm_scoreboard.h"
 #include "zlog.h"
 #include "fpm_atomic.h"
 #include "fpm_conf.h"
@@ -378,7 +377,7 @@ int fpm_status_handle_request(void) /* {{{ */
 
 		PUTS(buffer);
 		efree(buffer);
-		zend_string_release(_GET_str);
+		zend_string_release_ex(_GET_str, 0);
 
 		if (short_post) {
 			PUTS(short_post);

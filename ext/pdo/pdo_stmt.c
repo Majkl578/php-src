@@ -2,7 +2,7 @@
   +----------------------------------------------------------------------+
   | PHP Version 7                                                        |
   +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2017 The PHP Group                                |
+  | Copyright (c) 1997-2018 The PHP Group                                |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
   | that is bundled with this package in the file LICENSE, and is        |
@@ -263,7 +263,7 @@ static void param_dtor(zval *el) /* {{{ */
 	}
 
 	if (param->name) {
-		zend_string_release(param->name);
+		zend_string_release_ex(param->name, 0);
 	}
 
 	if (!Z_ISUNDEF(param->parameter)) {
@@ -359,7 +359,7 @@ static int really_register_bound_param(struct pdo_bound_param_data *param, pdo_s
 
 	if (is_param && !rewrite_name_to_position(stmt, param)) {
 		if (param->name) {
-			zend_string_release(param->name);
+			zend_string_release_ex(param->name, 0);
 			param->name = NULL;
 		}
 		return 0;
@@ -373,7 +373,7 @@ static int really_register_bound_param(struct pdo_bound_param_data *param, pdo_s
 		if (!stmt->methods->param_hook(stmt, param, PDO_PARAM_EVT_NORMALIZE
 				)) {
 			if (param->name) {
-				zend_string_release(param->name);
+				zend_string_release_ex(param->name, 0);
 				param->name = NULL;
 			}
 			return 0;
@@ -731,9 +731,7 @@ static int do_fetch_class_prepare(pdo_stmt_t *stmt) /* {{{ */
 
 		zend_fcall_info_args_ex(fci, ce->constructor, &stmt->fetch.cls.ctor_args);
 
-		fcc->initialized = 1;
 		fcc->function_handler = ce->constructor;
-		fcc->calling_scope = zend_get_executed_scope();
 		fcc->called_scope = ce;
 		return 1;
 	} else if (!Z_ISUNDEF(stmt->fetch.cls.ctor_args)) {
@@ -1305,7 +1303,7 @@ static PHP_METHOD(PDOStatement, fetchObject)
 
 	if (ctor_args) {
 		if (Z_TYPE_P(ctor_args) == IS_ARRAY && zend_hash_num_elements(Z_ARRVAL_P(ctor_args))) {
-			ZVAL_DUP(&stmt->fetch.cls.ctor_args, ctor_args);
+			ZVAL_ARR(&stmt->fetch.cls.ctor_args, zend_array_dup(Z_ARRVAL_P(ctor_args)));
 		} else {
 			ZVAL_UNDEF(&stmt->fetch.cls.ctor_args);
 		}
@@ -1580,8 +1578,8 @@ static PHP_METHOD(PDOStatement, bindValue)
 	param.paramno = -1;
 
 	if (FAILURE == zend_parse_parameters_ex(ZEND_PARSE_PARAMS_QUIET, ZEND_NUM_ARGS(),
-			"lz/|l", &param.paramno, &parameter, &param_type)) {
-		if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS(), "Sz/|l", &param.name,
+			"lz|l", &param.paramno, &parameter, &param_type)) {
+		if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS(), "Sz|l", &param.name,
 				&parameter, &param_type)) {
 			RETURN_FALSE;
 		}
@@ -1942,7 +1940,7 @@ int pdo_stmt_setup_fetch_mode(INTERNAL_FUNCTION_PARAMETERS, pdo_stmt_t *stmt, in
 						pdo_raise_impl_error(stmt->dbh, stmt, "HY000", "ctor_args must be either NULL or an array");
 						retval = FAILURE;
 					} else if (Z_TYPE(args[skip+2]) == IS_ARRAY && zend_hash_num_elements(Z_ARRVAL(args[skip+2]))) {
-						ZVAL_DUP(&stmt->fetch.cls.ctor_args, &args[skip+2]);
+						ZVAL_ARR(&stmt->fetch.cls.ctor_args, zend_array_dup(Z_ARRVAL(args[skip+2])));
 					}
 				}
 
@@ -2018,7 +2016,7 @@ static int pdo_stmt_do_next_rowset(pdo_stmt_t *stmt)
 
 		for (i = 0; i < stmt->column_count; i++) {
 			if (cols[i].name) {
-				zend_string_release(cols[i].name);
+				zend_string_release_ex(cols[i].name, 0);
 			}
 		}
 		efree(stmt->columns);
@@ -2149,7 +2147,7 @@ static PHP_METHOD(PDOStatement, debugDumpParams)
 }
 /* }}} */
 
-/* {{{ proto int PDOStatement::__wakeup()
+/* {{{ proto PDOStatement::__wakeup()
    Prevents use of a PDOStatement instance that has been unserialized */
 static PHP_METHOD(PDOStatement, __wakeup)
 {
@@ -2200,7 +2198,7 @@ static void dbstmt_prop_write(zval *object, zval *member, zval *value, void **ca
 	if (strcmp(Z_STRVAL_P(member), "queryString") == 0) {
 		pdo_raise_impl_error(stmt->dbh, stmt, "HY000", "property queryString is read only");
 	} else {
-		std_object_handlers.write_property(object, member, value, cache_slot);
+		zend_std_write_property(object, member, value, cache_slot);
 	}
 }
 
@@ -2213,7 +2211,7 @@ static void dbstmt_prop_delete(zval *object, zval *member, void **cache_slot)
 	if (strcmp(Z_STRVAL_P(member), "queryString") == 0) {
 		pdo_raise_impl_error(stmt->dbh, stmt, "HY000", "property queryString is read only");
 	} else {
-		std_object_handlers.unset_property(object, member, cache_slot);
+		zend_std_unset_property(object, member, cache_slot);
 	}
 }
 
@@ -2248,9 +2246,9 @@ static union _zend_function *dbstmt_method_get(zend_object **object_pp, zend_str
 	}
 
 out:
-	zend_string_release(lc_method_name);
+	zend_string_release_ex(lc_method_name, 0);
 	if (!fbc) {
-		fbc = std_object_handlers.get_method(object_pp, method_name, key);
+		fbc = zend_std_get_method(object_pp, method_name, key);
 	}
 	return fbc;
 }
@@ -2342,7 +2340,7 @@ PDO_API void php_pdo_free_statement(pdo_stmt_t *stmt)
 
 		for (i = 0; i < stmt->column_count; i++) {
 			if (cols[i].name) {
-				zend_string_release(cols[i].name);
+				zend_string_release_ex(cols[i].name, 0);
 				cols[i].name = NULL;
 			}
 		}
@@ -2470,7 +2468,8 @@ zend_object_iterator *pdo_stmt_iter_get(zend_class_entry *ce, zval *object, int 
 	struct php_pdo_iterator *I;
 
 	if (by_ref) {
-		zend_error(E_ERROR, "An iterator cannot be used with foreach by reference");
+		zend_throw_error(NULL, "An iterator cannot be used with foreach by reference");
+		return NULL;
 	}
 
 	I = ecalloc(1, sizeof(struct php_pdo_iterator));
@@ -2529,7 +2528,7 @@ static zval *row_prop_read(zval *object, zval *member, int type, void **cache_sl
 			if (strcmp(Z_STRVAL_P(member), "queryString") == 0) {
 				ZVAL_OBJ(&zobj, &stmt->std);
 				//zval_ptr_dtor(rv);
-				return std_object_handlers.read_property(&zobj, member, type, cache_slot, rv);
+				return zend_std_read_property(&zobj, member, type, cache_slot, rv);
 			}
 		}
 	}
@@ -2638,11 +2637,11 @@ static union _zend_function *row_method_get(
 	lc_method_name = zend_string_tolower(method_name);
 
 	if ((fbc = zend_hash_find_ptr(&pdo_row_ce->function_table, lc_method_name)) == NULL) {
-		zend_string_release(lc_method_name);
+		zend_string_release_ex(lc_method_name, 0);
 		return NULL;
 	}
 
-	zend_string_release(lc_method_name);
+	zend_string_release_ex(lc_method_name, 0);
 
 	return fbc;
 }
@@ -2668,7 +2667,7 @@ static int row_compare(zval *object1, zval *object2)
 	return -1;
 }
 
-zend_object_handlers pdo_row_object_handlers = {
+const zend_object_handlers pdo_row_object_handlers = {
 	0,
 	zend_objects_destroy_object,
 	pdo_row_free_storage,
