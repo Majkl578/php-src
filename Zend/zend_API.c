@@ -127,7 +127,7 @@ ZEND_API char *zend_get_type_by_const(int type) /* {{{ */
 		case IS_VOID:
 			return "void";
 		case _IS_NUMBER:
-			return "number";
+      return "number";
 		case IS_MIXED:
 			return "mixed";
 		default:
